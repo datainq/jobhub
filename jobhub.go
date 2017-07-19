@@ -1,11 +1,10 @@
-package main
+package jobhub
 
 import (
-	//"fmt"
 	//"github.com/cenkalti/backoff"
 	//"github.com/orian/utils/common"
 	"github.com/sirupsen/logrus"
-	"math/rand"
+	//"math/rand"
 	"os/exec"
 	"syscall"
 	"time"
@@ -22,9 +21,12 @@ type PipelineManager interface {
 }
 */
 
+var nextPipelineID int
+
 type Pipeline struct {
-	name          string
+	Name          string
 	id            int
+	nextJobID     int
 	jobContainer  []Job
 	jobDependency []Job
 }
@@ -32,14 +34,8 @@ type Pipeline struct {
 type Job struct {
 	Name       string
 	Path       string
-	pipelineId *int
+	pipelineID int
 	id         int
-}
-
-func (p Pipeline) New(name string) Pipeline {
-	p.id = getRandomId()
-	p.name = name
-	return p
 }
 
 func (p *Pipeline) AddJob(job Job) Job {
@@ -48,8 +44,11 @@ func (p *Pipeline) AddJob(job Job) Job {
 			/* error */
 		}
 	}
-	job.pipelineId = &p.id
-	job.id = getRandomId()
+	if nextPipelineID != p.id {
+		p.id = nextIDPipeline()
+	}
+	job.pipelineID = p.id
+	job.id = p.nextIDJob()
 	p.jobContainer = append(p.jobContainer, job)
 	return job
 }
@@ -83,9 +82,15 @@ func (p *Pipeline) getJobIndex(j Job) int {
 }
 */
 
-func getRandomId() int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Int()
+func nextIDPipeline() int {
+	tempID := nextPipelineID
+	nextPipelineID++
+	return tempID
+}
+
+func (p *Pipeline) nextIDJob() int {
+	p.nextJobID++
+	return p.nextJobID
 }
 
 type exitStatus struct {
@@ -94,18 +99,14 @@ type exitStatus struct {
 }
 
 func runJob(job Job) (*exitStatus, error) {
-	var (
-		start   time.Time
-		elapsed time.Duration
-	)
 	_, err := exec.LookPath(job.Path)
 	if err != nil {
 		return nil, err
 	}
 	process := exec.Command(job.Path)
-	start = time.Now()
+	start := time.Now()
 	err = process.Run()
-	elapsed = time.Since(start)
+	elapsed := time.Since(start)
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
@@ -114,19 +115,4 @@ func runJob(job Job) (*exitStatus, error) {
 		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 	}
 	return nil, err
-}
-
-func main() {
-	/* For testing purposes only:
-	//common.InitLogrus("pisch", "DEBUG", "/tmp/pisch", false, false)
-	jobs := []Job{
-		Job{"success", "./simple_success"}, Job{"success2", "./simple_success"}, Job{"success3", "./simple_success"}, Job{"failure", "./simple_failure"},
-	}
-	for _, v := range jobs {
-		_, err := runJob(v)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
-	*/
 }
