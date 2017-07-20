@@ -1,39 +1,30 @@
 package jobhub
 
 import (
-	//"github.com/cenkalti/backoff"
-	//"github.com/orian/utils/common"
+	"fmt"
 	"github.com/sirupsen/logrus"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
 )
 
-/*
-type PipelineManager interface {
-	New(string) Pipeline
-	AddJob(Job) Job
-	AddJobDependency(...Job)
-	Run()
-}
-*/
-
 var nextPipelineID int = 1
 
 type Pipeline struct {
-	Name          string
-	Log           logrus.FieldLogger
-	id            int
-	nextJobID     int
-	jobContainer  []Job
-	jobDependency []Job
+	Name            string
+	Log             logrus.FieldLogger
+	id, nextJobID   int
+	jobContainer    []Job
+	jobByID         map[int]Job
+	isStartingJob   map[int]bool
+	recursionLevels map[string]int
+	jobDependency   map[int][]int
 }
 
 type Job struct {
-	Name       string
-	Path       string
-	pipelineID int
-	id         int
+	Name, Path     string
+	pipelineID, id int
 }
 
 type exitStatus struct {
@@ -41,8 +32,25 @@ type exitStatus struct {
 	status  syscall.WaitStatus
 }
 
+func NewPipeline() *Pipeline {
+
+	return &Pipeline{
+		Log:             logrus.StandardLogger(),
+		jobByID:         make(map[int]Job),
+		isStartingJob:   make(map[int]bool),
+		recursionLevels: make(map[string]int),
+		jobDependency:   make(map[int][]int),
+	}
+}
+
+func nextIDPipeline() int {
+	tempID := nextPipelineID
+	nextPipelineID++
+	return tempID
+}
+
 func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
-	_, err := exec.LookPath(job.Path)
+	_, err := os.Stat(job.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -53,17 +61,11 @@ func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			p.Log.Panicf("Cannot cast to exitError: %s", err)
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s", p.id, p.Name, job.id, job.Name, elapsed, err)
 		}
 		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 	}
 	return nil, err
-}
-
-func nextIDPipeline() int {
-	tempID := nextPipelineID
-	nextPipelineID++
-	return tempID
 }
 
 func (p *Pipeline) nextIDJob() int {
@@ -74,48 +76,62 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			/* error */
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Panic: Job has already been added", p.id, p.Name, job.id, job.Name)
 		}
 	}
 	if p.id == 0 {
 		p.id = nextIDPipeline()
-		/*
-			if p.Log == nil {
-			 how do you log an error without a logger?
-			}
-		*/
 	}
 	job.pipelineID = p.id
 	job.id = p.nextIDJob()
 	p.jobContainer = append(p.jobContainer, job)
+	p.jobByID[job.id] = job
+	p.isStartingJob[job.id] = true
 	return job
 }
 
-func (p *Pipeline) AddJobDependency(jobs ...Job) {
-	p.jobDependency = jobs
+func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
+	for _, d := range deps {
+		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
+		delete(p.isStartingJob, d.id)
+	}
 }
 
+func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
+	for _, depID := range p.jobDependency[jobID] {
+		p.recursionLevels[p.jobByID[jobID].Name] = level
+		p.recursionLevels[p.jobByID[depID].Name] = level
+		fmt.Printf("%s -> %s | recursion level: %d\n", p.jobByID[jobID], p.jobByID[depID], level)
+		p.resolveDependeciesRecursion(depID, level+1)
+	}
+}
+
+func (p *Pipeline) resolveDependencies() {
+	for start, _ := range p.isStartingJob {
+		p.resolveDependeciesRecursion(p.jobContainer[start].id, 0)
+	}
+}
+
+func (p *Pipeline) PrintDeps() {
+	p.resolveDependeciesRecursion(p.jobContainer[0].id, 0)
+	fmt.Println(p.recursionLevels)
+}
+
+func (j Job) String() string {
+	return fmt.Sprintf("N: %s ID: %d", j.Name, j.id)
+}
+
+/* this won't compile for a while
 func (p *Pipeline) Run() {
 	if p.jobDependency != nil {
 		for _, job := range p.jobDependency {
-			_, err := runJob(job)
+			exitStatus, err := p.runJob(job)
 			if err != nil {
-				/* abort, I think?
-				   throw an error: job[i].Name with ID: job[i].id failed */
+				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s", p.id, p.Name, job.id, job.Name, exitStatus.runtime, err)
 			}
 		}
 	} else {
-		/* error */
+		p.Log.Panicf("Pipeline [%d][%s] | Panic: No jobs in queue", p.id, p.Name)
 	}
-}
-
-/*
-func (p *Pipeline) getJobIndex(job Job) int {
-	for pos, val := range p.jobContainer {
-		if val == job {
-			return pos
-		}
-	}
-	return -1
 }
 */

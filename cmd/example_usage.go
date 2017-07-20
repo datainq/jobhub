@@ -3,19 +3,42 @@ package main
 import "github.com/amwolff/jobhub"
 
 func main() {
-	p := jobhub.Pipeline{
-		Name: "Example pipeline",
-	}
-	j0 := jobhub.Job{
-		Name: "Failure",
-		Path: "./tests/simple_failure",
-	}
-	j0 = p.AddJob(j0)
-	j1 := jobhub.Job{
-		Name: "Success",
-		Path: "./tests/simple_success",
-	}
-	j1 = p.AddJob(j1)
-	p.AddJobDependency(j1, j0)
-	p.Run()
+	p := jobhub.NewPipeline()
+
+	jA := p.AddJob(
+		jobhub.Job{
+			Name: "A",
+			Path: "./tests/simple_success",
+		},
+	)
+	jB := p.AddJob(
+		jobhub.Job{
+			Name: "B",
+			Path: "./tests/simple_success",
+		},
+	)
+	jC := p.AddJob(
+		jobhub.Job{
+			Name: "C",
+			Path: "./tests/simple_success",
+		},
+	)
+	jD := p.AddJob(
+		jobhub.Job{
+			Name: "D",
+			Path: "./tests/simple_success",
+		},
+	)
+	jE := p.AddJob(
+		jobhub.Job{
+			Name: "E",
+			Path: "./tests/simple_success",
+		},
+	)
+	p.AddJobDependency(jA, jB, jD)
+	p.AddJobDependency(jB, jC, jE)
+	p.AddJobDependency(jC, jD, jE)
+	//circular dependency
+	//p.AddJobDependency(jD, jB)
+	p.PrintDeps()
 }
