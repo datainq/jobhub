@@ -4,13 +4,10 @@ import (
 	//"github.com/cenkalti/backoff"
 	//"github.com/orian/utils/common"
 	"github.com/sirupsen/logrus"
-	//"math/rand"
 	"os/exec"
 	"syscall"
 	"time"
 )
-
-var log = logrus.New()
 
 /*
 type PipelineManager interface {
@@ -44,7 +41,7 @@ type exitStatus struct {
 	status  syscall.WaitStatus
 }
 
-func runJob(job Job) (*exitStatus, error) {
+func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 	_, err := exec.LookPath(job.Path)
 	if err != nil {
 		return nil, err
@@ -56,7 +53,7 @@ func runJob(job Job) (*exitStatus, error) {
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			log.Panicf("Cannot cast to exitError: %s", err)
+			p.Log.Panicf("Cannot cast to exitError: %s", err)
 		}
 		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 	}
@@ -82,6 +79,11 @@ func (p *Pipeline) AddJob(job Job) Job {
 	}
 	if p.id == 0 {
 		p.id = nextIDPipeline()
+		/*
+			if p.Log == nil {
+			 how do you log an error without a logger?
+			}
+		*/
 	}
 	job.pipelineID = p.id
 	job.id = p.nextIDJob()
@@ -108,9 +110,9 @@ func (p *Pipeline) Run() {
 }
 
 /*
-func (p *Pipeline) getJobIndex(j Job) int {
+func (p *Pipeline) getJobIndex(job Job) int {
 	for pos, val := range p.jobContainer {
-		if val == j {
+		if val == job {
 			return pos
 		}
 	}
