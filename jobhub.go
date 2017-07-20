@@ -21,10 +21,11 @@ type PipelineManager interface {
 }
 */
 
-var nextPipelineID int
+var nextPipelineID int = 1
 
 type Pipeline struct {
 	Name          string
+	Log           logrus.FieldLogger
 	id            int
 	nextJobID     int
 	jobContainer  []Job
@@ -38,13 +39,48 @@ type Job struct {
 	id         int
 }
 
+type exitStatus struct {
+	runtime time.Duration
+	status  syscall.WaitStatus
+}
+
+func runJob(job Job) (*exitStatus, error) {
+	_, err := exec.LookPath(job.Path)
+	if err != nil {
+		return nil, err
+	}
+	process := exec.Command(job.Path)
+	start := time.Now()
+	err = process.Run()
+	elapsed := time.Since(start)
+	if err != nil {
+		exitError, ok := err.(*exec.ExitError)
+		if !ok {
+			log.Panicf("Cannot cast to exitError: %s", err)
+		}
+		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
+	}
+	return nil, err
+}
+
+func nextIDPipeline() int {
+	tempID := nextPipelineID
+	nextPipelineID++
+	return tempID
+}
+
+func (p *Pipeline) nextIDJob() int {
+	p.nextJobID++
+	return p.nextJobID
+}
+
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
 			/* error */
 		}
 	}
-	if nextPipelineID != p.id {
+	if p.id == 0 {
 		p.id = nextIDPipeline()
 	}
 	job.pipelineID = p.id
@@ -81,38 +117,3 @@ func (p *Pipeline) getJobIndex(j Job) int {
 	return -1
 }
 */
-
-func nextIDPipeline() int {
-	tempID := nextPipelineID
-	nextPipelineID++
-	return tempID
-}
-
-func (p *Pipeline) nextIDJob() int {
-	p.nextJobID++
-	return p.nextJobID
-}
-
-type exitStatus struct {
-	runtime time.Duration
-	status  syscall.WaitStatus
-}
-
-func runJob(job Job) (*exitStatus, error) {
-	_, err := exec.LookPath(job.Path)
-	if err != nil {
-		return nil, err
-	}
-	process := exec.Command(job.Path)
-	start := time.Now()
-	err = process.Run()
-	elapsed := time.Since(start)
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			log.Panicf("Cannot cast to exitError: %s", err)
-		}
-		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
-	}
-	return nil, err
-}
