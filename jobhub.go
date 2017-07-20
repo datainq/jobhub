@@ -17,9 +17,9 @@ type Pipeline struct {
 	id, nextJobID   int
 	jobContainer    []Job
 	jobByID         map[int]Job
-	isStartingJob   map[int]bool
-	recursionLevels map[string]int
 	jobDependency   map[int][]int
+	isStartingJob   map[int]bool
+	recursionLevels map[int]int
 }
 
 type Job struct {
@@ -37,9 +37,9 @@ func NewPipeline() *Pipeline {
 	return &Pipeline{
 		Log:             logrus.StandardLogger(),
 		jobByID:         make(map[int]Job),
-		isStartingJob:   make(map[int]bool),
-		recursionLevels: make(map[string]int),
 		jobDependency:   make(map[int][]int),
+		isStartingJob:   make(map[int]bool),
+		recursionLevels: make(map[int]int),
 	}
 }
 
@@ -98,9 +98,8 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 }
 
 func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
+	p.recursionLevels[jobID] = level
 	for _, depID := range p.jobDependency[jobID] {
-		p.recursionLevels[p.jobByID[jobID].Name] = level
-		p.recursionLevels[p.jobByID[depID].Name] = level
 		fmt.Printf("%s -> %s | recursion level: %d\n", p.jobByID[jobID], p.jobByID[depID], level)
 		p.resolveDependeciesRecursion(depID, level+1)
 	}
@@ -113,7 +112,7 @@ func (p *Pipeline) resolveDependencies() {
 }
 
 func (p *Pipeline) PrintDeps() {
-	p.resolveDependeciesRecursion(p.jobContainer[0].id, 0)
+	p.resolveDependeciesRecursion(1, 0)
 	fmt.Println(p.recursionLevels)
 }
 
