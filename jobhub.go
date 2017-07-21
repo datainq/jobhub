@@ -13,19 +13,24 @@ import (
 var nextPipelineID int = 1
 
 type Pipeline struct {
-	Name            string
-	Log             logrus.FieldLogger
-	id, nextJobID   int
+	Name string
+	Log  logrus.FieldLogger
+
+	id              int
+	nextJobID       int
 	jobContainer    []Job
 	jobByID         map[int]Job
 	jobDependency   map[int][]int
-	isStartingJob   map[int]bool
+	startingJob     map[int]bool
 	recursionLevels map[int]int
 }
 
 type Job struct {
-	Name, Path     string
-	pipelineID, id int
+	Name string
+	Path string
+
+	pipelineID int
+	id         int
 }
 
 type exitStatus struct {
@@ -39,7 +44,7 @@ func NewPipeline() *Pipeline {
 		Log:             logrus.StandardLogger(),
 		jobByID:         make(map[int]Job),
 		jobDependency:   make(map[int][]int),
-		isStartingJob:   make(map[int]bool),
+		startingJob:     make(map[int]bool),
 		recursionLevels: make(map[int]int),
 	}
 }
@@ -48,25 +53,6 @@ func nextIDPipeline() int {
 	tempID := nextPipelineID
 	nextPipelineID++
 	return tempID
-}
-
-func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
-	_, err := os.Stat(job.Path)
-	if err != nil {
-		return nil, err
-	}
-	process := exec.Command(job.Path)
-	start := time.Now()
-	err = process.Run()
-	elapsed := time.Since(start)
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			p.Log.Panicf("Cannot cast to exitError", err)
-		}
-		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
-	}
-	return nil, err
 }
 
 func (p *Pipeline) nextIDJob() int {
@@ -88,14 +74,14 @@ func (p *Pipeline) AddJob(job Job) Job {
 	job.id = p.nextIDJob()
 	p.jobContainer = append(p.jobContainer, job)
 	p.jobByID[job.id] = job
-	p.isStartingJob[job.id] = true
+	p.startingJob[job.id] = true
 	return job
 }
 
 func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	for _, d := range deps {
 		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
-		delete(p.isStartingJob, d.id)
+		delete(p.startingJob, d.id)
 	}
 }
 
@@ -112,15 +98,34 @@ func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
 }
 
 func (p *Pipeline) resolveDependencies() {
-	for start, _ := range p.isStartingJob {
-		p.resolveDependeciesRecursion(p.jobContainer[start].id, 1)
+	for startID, _ := range p.startingJob {
+		p.resolveDependeciesRecursion(startID, 1)
 	}
 }
 
 //debug func
 func (p *Pipeline) PrintDeps() {
-	p.resolveDependeciesRecursion(1, 1)
+	p.resolveDependencies()
 	p.Log.Debugf("%d", p.recursionLevels)
+}
+
+func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
+	_, err := os.Stat(job.Path)
+	if err != nil {
+		return nil, err
+	}
+	process := exec.Command(job.Path)
+	start := time.Now()
+	err = process.Run()
+	elapsed := time.Since(start)
+	if err != nil {
+		exitError, ok := err.(*exec.ExitError)
+		if !ok {
+			p.Log.Panicf("Cannot cast to exitError", err)
+		}
+		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
+	}
+	return nil, err
 }
 
 func (j Job) String() string {

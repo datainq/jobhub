@@ -1,16 +1,13 @@
 package main
 
 import (
-	"github.com/amwolff/jobhub"
+	"github.com/datainq/jobhub"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-
-	logrus.SetLevel(logrus.DebugLevel)
-
 	p := jobhub.NewPipeline()
-
+	logrus.SetLevel(logrus.DebugLevel)
 	jA := p.AddJob(
 		jobhub.Job{
 			Name: "A",
@@ -44,7 +41,5 @@ func main() {
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE)
 	p.AddJobDependency(jC, jD, jE)
-	//circular dependency
-	//p.AddJobDependency(jD, jB)
 	p.PrintDeps()
 }
