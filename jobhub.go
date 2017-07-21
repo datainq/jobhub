@@ -85,7 +85,7 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	}
 }
 
-func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
+func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
 	if l := p.recursionLevels[jobID]; l >= level {
 		return
 	}
@@ -93,19 +93,19 @@ func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
 	level++
 	for _, depID := range p.jobDependency[jobID] {
 		p.Log.Debugf("%s -> %s | recursion level: %d", p.jobByID[jobID], p.jobByID[depID], level)
-		p.resolveDependeciesRecursion(depID, level)
+		p.resolveDependencyRecursion(depID, level)
 	}
 }
 
-func (p *Pipeline) resolveDependencies() {
+func (p *Pipeline) resolveDependency() {
 	for startID, _ := range p.startingJob {
-		p.resolveDependeciesRecursion(startID, 1)
+		p.resolveDependencyRecursion(startID, 1)
 	}
 }
 
 //debug func
 func (p *Pipeline) PrintDeps() {
-	p.resolveDependencies()
+	p.resolveDependency()
 	p.Log.Debugf("%d", p.recursionLevels)
 }
 
