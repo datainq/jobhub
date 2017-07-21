@@ -1,8 +1,14 @@
 package main
 
-import "github.com/amwolff/jobhub"
+import (
+	"github.com/amwolff/jobhub"
+	"github.com/sirupsen/logrus"
+)
 
 func main() {
+
+	logrus.SetLevel(logrus.DebugLevel)
+
 	p := jobhub.NewPipeline()
 
 	jA := p.AddJob(

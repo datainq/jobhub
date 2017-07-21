@@ -2,11 +2,12 @@ package jobhub
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 var nextPipelineID int = 1
@@ -61,7 +62,7 @@ func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s", p.id, p.Name, job.id, job.Name, elapsed, err)
+			p.Log.Panicf("Cannot cast to exitError", err)
 		}
 		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 	}
@@ -76,7 +77,8 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Panic: Job has already been added", p.id, p.Name, job.id, job.Name)
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Panic: Job has already been added",
+				p.id, p.Name, job.id, job.Name)
 		}
 	}
 	if p.id == 0 {
@@ -98,13 +100,13 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 }
 
 func (p *Pipeline) resolveDependeciesRecursion(jobID int, level int) {
-	if lvl := p.recursionLevels[jobID]; lvl >= level {
+	if l := p.recursionLevels[jobID]; l >= level {
 		return
 	}
 	p.recursionLevels[jobID] = level
 	level++
 	for _, depID := range p.jobDependency[jobID] {
-		fmt.Printf("%s -> %s | recursion level: %d\n", p.jobByID[jobID], p.jobByID[depID], level)
+		p.Log.Debugf("%s -> %s | recursion level: %d", p.jobByID[jobID], p.jobByID[depID], level)
 		p.resolveDependeciesRecursion(depID, level)
 	}
 }
@@ -118,11 +120,11 @@ func (p *Pipeline) resolveDependencies() {
 //debug func
 func (p *Pipeline) PrintDeps() {
 	p.resolveDependeciesRecursion(1, 1)
-	fmt.Println(p.recursionLevels)
+	p.Log.Debugf("%d", p.recursionLevels)
 }
 
 func (j Job) String() string {
-	return fmt.Sprintf("N: %s ID: %d", j.Name, j.id)
+	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
 }
 
 /* this won't compile for a while
