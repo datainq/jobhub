@@ -62,5 +62,4 @@ func main() {
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
 	p.PrintDeps()
-	p.Run()
 }

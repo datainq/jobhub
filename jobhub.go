@@ -99,20 +99,24 @@ func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
 
 func (p *Pipeline) resolveDependency() []int {
 	var queue []int
+	tempRL := make(map[int]int)
 	for startID, _ := range p.startingJob {
 		p.resolveDependencyRecursion(startID, 1)
 	}
-	for i := 0; i < len(p.recursionLevels); {
+	for jID, l := range p.recursionLevels {
+		tempRL[jID] = l
+	}
+	for i := 0; i < len(tempRL); {
 		var jobID int
 		max := 0
-		for j, l := range p.recursionLevels {
+		for jID, l := range tempRL {
 			if l > max {
 				max = l
-				jobID = j
+				jobID = jID
 			}
 		}
 		queue = append(queue, jobID)
-		delete(p.recursionLevels, jobID)
+		delete(tempRL, jobID)
 	}
 	return queue
 }
@@ -136,11 +140,11 @@ func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 func (p *Pipeline) Run() {
 	if p.jobDependency != nil {
 		queue := p.resolveDependency()
-		for _, jobID := range queue {
-			exitStatus, err := p.runJob(p.jobByID[jobID])
+		for _, jID := range queue {
+			exitStatus, err := p.runJob(p.jobByID[jID])
 			if err != nil {
 				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s",
-					p.id, p.Name, jobID, p.jobByID[jobID].Name, exitStatus.runtime, err)
+					p.id, p.Name, jID, p.jobByID[jID].Name, exitStatus.runtime, err)
 			}
 		}
 	} else {
@@ -149,9 +153,7 @@ func (p *Pipeline) Run() {
 }
 
 func (p *Pipeline) PrintDeps() {
-	for _, jobID := range p.resolveDependency() {
-		p.Log.Debugf("%s", p.jobByID[jobID])
-	}
+	p.Log.Debugf("Queue: %d", p.resolveDependency())
 }
 
 func (j Job) String() string {
