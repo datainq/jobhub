@@ -97,16 +97,24 @@ func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
 	}
 }
 
-func (p *Pipeline) resolveDependency() {
+func (p *Pipeline) resolveDependency() []int {
+	var queue []int
 	for startID, _ := range p.startingJob {
 		p.resolveDependencyRecursion(startID, 1)
 	}
-}
-
-//debug func
-func (p *Pipeline) PrintDeps() {
-	p.resolveDependency()
-	p.Log.Debugf("%d", p.recursionLevels)
+	for i := 0; i < len(p.recursionLevels); {
+		var jobID int
+		max := 0
+		for j, l := range p.recursionLevels {
+			if l > max {
+				max = l
+				jobID = j
+			}
+		}
+		queue = append(queue, jobID)
+		delete(p.recursionLevels, jobID)
+	}
+	return queue
 }
 
 func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
@@ -118,31 +126,34 @@ func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 	start := time.Now()
 	err = process.Run()
 	elapsed := time.Since(start)
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			p.Log.Panicf("Cannot cast to exitError", err)
-		}
-		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		p.Log.Panicf("Cannot cast to exitError", err)
 	}
-	return nil, err
+	return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 }
 
-func (j Job) String() string {
-	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
-}
-
-/* this won't compile for a while
 func (p *Pipeline) Run() {
 	if p.jobDependency != nil {
-		for _, job := range p.jobDependency {
-			exitStatus, err := p.runJob(job)
+		queue := p.resolveDependency()
+		for _, jobID := range queue {
+			exitStatus, err := p.runJob(p.jobByID[jobID])
 			if err != nil {
-				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s", p.id, p.Name, job.id, job.Name, exitStatus.runtime, err)
+				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s",
+					p.id, p.Name, jobID, p.jobByID[jobID].Name, exitStatus.runtime, err)
 			}
 		}
 	} else {
 		p.Log.Panicf("Pipeline [%d][%s] | Panic: No jobs in queue", p.id, p.Name)
 	}
 }
-*/
+
+func (p *Pipeline) PrintDeps() {
+	for _, jobID := range p.resolveDependency() {
+		p.Log.Debugf("%s", p.jobByID[jobID])
+	}
+}
+
+func (j Job) String() string {
+	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
+}

@@ -38,8 +38,29 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	p.AddJobDependency(jA, jB, jD)
+	jF := p.AddJob(
+		jobhub.Job{
+			Name: "F",
+			Path: "./tests/simple_success",
+		},
+	)
+	jG := p.AddJob(
+		jobhub.Job{
+			Name: "G",
+			Path: "./tests/simple_success",
+		},
+	)
+	jH := p.AddJob(
+		jobhub.Job{
+			Name: "H",
+			Path: "./tests/simple_success",
+		},
+	)
+	p.AddJobDependency(jA, jB, jD, jF)
 	p.AddJobDependency(jB, jC, jE)
 	p.AddJobDependency(jC, jD, jE)
+	p.AddJobDependency(jF, jG)
+	p.AddJobDependency(jG, jH)
 	p.PrintDeps()
+	p.Run()
 }
