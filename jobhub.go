@@ -43,7 +43,6 @@ func (j Job) String() string {
 }
 
 func NewPipeline() *Pipeline {
-
 	return &Pipeline{
 		Log:             logrus.StandardLogger(),
 		jobByID:         make(map[int]Job),
@@ -104,7 +103,6 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 							p.id, p.Name, givenJob.id, givenJob.Name)
 					}
 				}
-
 			}
 			for _, d := range deps {
 				p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
@@ -118,7 +116,6 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 		p.Log.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
 			p.id, p.Name)
 	}
-
 }
 
 func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
