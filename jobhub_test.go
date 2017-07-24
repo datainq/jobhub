@@ -1,16 +1,25 @@
 package jobhub
 
-import "testing"
+import (
+	"github.com/sirupsen/logrus"
+	"testing"
+)
 
 func TestAddJobDependency(t *testing.T) {
-	var want error
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic.")
+		}
+	}()
 	p := NewPipeline()
+	logrus.SetLevel(logrus.DebugLevel)
 	jA := Job{
 		Name: "A",
 		Path: "./tests/simple_success",
 	}
-	p.AddJobDependency(jA)
-	if want == nil {
-		t.Error("No error detected and there should be one.")
-	}
+	jB := p.AddJob(Job{
+		Name: "B",
+		Path: "./tests/simple_success",
+	})
+	p.AddJobDependency(jA, jB)
 }

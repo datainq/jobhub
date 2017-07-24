@@ -67,7 +67,7 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Panic: Job has already been added",
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Job has already been added",
 				p.id, p.Name, job.id, job.Name)
 		}
 	}
@@ -82,16 +82,43 @@ func (p *Pipeline) AddJob(job Job) Job {
 	return job
 }
 
-func (p *Pipeline) AddJobDependency(job Job, deps ...Job) error {
-	// check if job and deps belong to the pipeline
-	// check if job and deps are added to the container
-	// use "continue"
-	var err error
-	for _, d := range deps {
-		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
-		delete(p.startingJob, d.id)
+func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
+	var tempContainer []Job
+	tempContainer = append(deps, job)
+	if p.id != 0 {
+		if p.jobContainer != nil {
+			for _, givenJob := range tempContainer {
+				if givenJob.id == p.id {
+					continue
+				} else {
+					p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
+						p.id, p.Name, givenJob.id, givenJob.Name)
+				}
+			}
+			for _, givenJob := range tempContainer {
+				for _, addedJob := range p.jobContainer {
+					if addedJob == givenJob {
+						continue
+					} else {
+						p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has never been added",
+							p.id, p.Name, givenJob.id, givenJob.Name)
+					}
+				}
+
+			}
+			for _, d := range deps {
+				p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
+				delete(p.startingJob, d.id)
+			}
+		} else {
+			p.Log.Panicf("Pipeline [%d][%s] | Job Container is empty",
+				p.id, p.Name)
+		}
+	} else {
+		p.Log.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
+			p.id, p.Name)
 	}
-	return err
+
 }
 
 func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
@@ -152,12 +179,12 @@ func (p *Pipeline) Run() {
 		for _, jID := range queue {
 			exitStatus, err := p.runJob(p.jobByID[jID])
 			if err != nil {
-				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | Panic: %s",
+				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | %s",
 					p.id, p.Name, jID, p.jobByID[jID].Name, exitStatus.runtime, err)
 			}
 		}
 	} else {
-		p.Log.Panicf("Pipeline [%d][%s] | Panic: No jobs in queue", p.id, p.Name)
+		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
 }
 
