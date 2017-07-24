@@ -39,7 +39,7 @@ type exitStatus struct {
 }
 
 func (j Job) String() string {
-	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
+	return fmt.Sprintf("Pipeline ID: %d | ID: %d| Name: %s\n", j.pipelineID, j.id, j.Name)
 }
 
 func NewPipeline() *Pipeline {
@@ -78,43 +78,30 @@ func (p *Pipeline) AddJob(job Job) Job {
 	p.jobContainer = append(p.jobContainer, job)
 	p.jobByID[job.id] = job
 	p.startingJob[job.id] = true
+	p.Log.Debug(p.jobContainer)
 	return job
 }
 
 func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	var tempContainer []Job
 	tempContainer = append(deps, job)
-	if p.id != 0 {
-		if p.jobContainer != nil {
-			for _, givenJob := range tempContainer {
-				if givenJob.id == p.id {
-					continue
-				} else {
-					p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
-						p.id, p.Name, givenJob.id, givenJob.Name)
-				}
-			}
-			for _, givenJob := range tempContainer {
-				for _, addedJob := range p.jobContainer {
-					if addedJob == givenJob {
-						continue
-					} else {
-						p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has never been added",
-							p.id, p.Name, givenJob.id, givenJob.Name)
-					}
-				}
-			}
-			for _, d := range deps {
-				p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
-				delete(p.startingJob, d.id)
-			}
-		} else {
-			p.Log.Panicf("Pipeline [%d][%s] | Job Container is empty",
-				p.id, p.Name)
-		}
-	} else {
+	if p.id == 0 {
 		p.Log.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
 			p.id, p.Name)
+	}
+	if p.jobContainer == nil {
+		p.Log.Panicf("Pipeline [%d][%s] | Job Container is empty",
+			p.id, p.Name)
+	}
+	for _, givenJob := range tempContainer {
+		if givenJob.pipelineID != p.id {
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
+				p.id, p.Name, givenJob.id, givenJob.Name)
+		}
+	}
+	for _, d := range deps {
+		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
+		delete(p.startingJob, d.id)
 	}
 }
 
@@ -131,6 +118,7 @@ func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
 }
 
 func (p *Pipeline) resolveDependency() []int {
+	//TODO(amwolff) switch to sort.SortSlice
 	var queue []int
 	tempRL := make(map[int]int)
 	for startID, _ := range p.startingJob {
@@ -139,7 +127,7 @@ func (p *Pipeline) resolveDependency() []int {
 	for jID, l := range p.recursionLevels {
 		tempRL[jID] = l
 	}
-	for i := 0; i < len(tempRL); {
+	for len(tempRL) > 0 {
 		var jobID int
 		max := 0
 		for jID, l := range tempRL {
@@ -163,16 +151,19 @@ func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
 	start := time.Now()
 	err = process.Run()
 	elapsed := time.Since(start)
-	exitError, ok := err.(*exec.ExitError)
-	if !ok {
-		p.Log.Panicf("Cannot cast to exitError", err)
+	if err != nil {
+		exitError, ok := err.(*exec.ExitError)
+		if !ok {
+			p.Log.Panicf("Cannot cast to exitError", err)
+		}
+		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
 	}
-	return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
+	return &exitStatus{runtime: elapsed}, err
 }
 
 func (p *Pipeline) Run() {
-	if p.jobDependency != nil {
-		queue := p.resolveDependency()
+	queue := p.resolveDependency()
+	if queue != nil {
 		for _, jID := range queue {
 			exitStatus, err := p.runJob(p.jobByID[jID])
 			if err != nil {

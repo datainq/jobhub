@@ -56,10 +56,18 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	p.AddJobDependency(jA, jB, jD, jF)
-	p.AddJobDependency(jB, jC, jE)
+	jI := p.AddJob(
+		jobhub.Job{
+			Name: "I",
+			Path: "./tests/simple_success",
+		},
+	)
+	p.AddJobDependency(jA, jB, jD)
+	p.AddJobDependency(jB, jC, jE, jF)
 	p.AddJobDependency(jC, jD, jE)
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
+	p.AddJobDependency(jH, jI)
+	p.Run()
 	p.PrintDeps()
 }
