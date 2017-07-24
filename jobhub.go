@@ -38,6 +38,10 @@ type exitStatus struct {
 	status  syscall.WaitStatus
 }
 
+func (j Job) String() string {
+	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
+}
+
 func NewPipeline() *Pipeline {
 
 	return &Pipeline{
@@ -78,11 +82,16 @@ func (p *Pipeline) AddJob(job Job) Job {
 	return job
 }
 
-func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
+func (p *Pipeline) AddJobDependency(job Job, deps ...Job) error {
+	// check if job and deps belong to the pipeline
+	// check if job and deps are added to the container
+	// use "continue"
+	var err error
 	for _, d := range deps {
 		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
 		delete(p.startingJob, d.id)
 	}
+	return err
 }
 
 func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
@@ -154,8 +163,4 @@ func (p *Pipeline) Run() {
 
 func (p *Pipeline) PrintDeps() {
 	p.Log.Debugf("Queue: %d", p.resolveDependency())
-}
-
-func (j Job) String() string {
-	return fmt.Sprintf("ID (Name): %d (%s)", j.id, j.Name)
 }
