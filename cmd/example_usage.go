@@ -7,17 +7,18 @@ import (
 
 func main() {
 	p := jobhub.NewPipeline()
+	p.Name = "Example pipeline"
 	logrus.SetLevel(logrus.DebugLevel)
 	jA := p.AddJob(
 		jobhub.Job{
 			Name: "A",
-			Path: "./tests/simple_success",
+			Path: "./tests/simple_failure",
 		},
 	)
 	jB := p.AddJob(
 		jobhub.Job{
 			Name: "B",
-			Path: "./tests/simple_success",
+			Path: "./tests/simple_failure",
 		},
 	)
 	jC := p.AddJob(
@@ -56,10 +57,18 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	p.AddJobDependency(jA, jB, jD, jF)
-	p.AddJobDependency(jB, jC, jE)
+	jI := p.AddJob(
+		jobhub.Job{
+			Name: "I",
+			Path: "./tests/simple_success",
+		},
+	)
+	p.AddJobDependency(jA, jB, jD)
+	p.AddJobDependency(jB, jC, jE, jF)
 	p.AddJobDependency(jC, jD, jE)
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
-	p.PrintDeps()
+	p.AddJobDependency(jH, jI)
+	status := p.Run()
+	logrus.Info(status)
 }
