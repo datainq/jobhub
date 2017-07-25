@@ -6,8 +6,7 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
-
-	"github.com/go-gomail/gomail"
+	
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,8 +15,6 @@ var nextPipelineID = 1
 type Pipeline struct {
 	Name    string
 	Log     logrus.FieldLogger
-	Message gomail.Message
-	Dialer  gomail.Dialer
 
 	id              int
 	nextJobID       int
@@ -172,7 +169,6 @@ func (p *Pipeline) runJob(job Job) (JobStatus, error) {
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-<<<<<<< HEAD
 			p.Log.Errorf("Cannot cast to exitError: %s", err)
 		}
 		p.Log.Debug(exitError.Sys().(syscall.WaitStatus))
@@ -185,26 +181,6 @@ func (p *Pipeline) Run() PipelineStatus {
 	queue := p.resolveDependency()
 	pipelineStatus := PipelineStatus{JobStatus: make([]StatusCode, len(queue))}
 	if queue == nil {
-=======
-			p.Log.Panicf("Cannot cast to exitError", err)
-		}
-		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
-	}
-	return &exitStatus{runtime: elapsed}, err
-}
-
-func (p *Pipeline) Run() {
-	queue := p.resolveDependency()
-	if queue != nil {
-		for _, jID := range queue {
-			exitStatus, err := p.runJob(p.jobByID[jID])
-			if err != nil {
-				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | %s",
-					p.id, p.Name, jID, p.jobByID[jID].Name, exitStatus.runtime, err)
-			}
-		}
-	} else {
->>>>>>> 3f0c7317a49d12146fab8a61302da20712c7676b
 		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
 	for i, jID := range queue {

@@ -69,11 +69,6 @@ func main() {
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
-<<<<<<< HEAD
 	status := p.Run()
 	logrus.Info(status)
-=======
-	p.Run()
-	p.PrintDeps()
->>>>>>> 3f0c7317a49d12146fab8a61302da20712c7676b
 }
