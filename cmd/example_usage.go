@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/datainq/jobhub"
+	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,6 +64,15 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
+	msg := mail.EMail{
+		From:     "FROM",
+		To:       "TO",
+		Subject:  "SUBJECT",
+		Host:     "HOST",
+		Port:     465,
+		Username: "USERNAME",
+		Password: "PASSWORD",
+	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)
 	p.AddJobDependency(jC, jD, jE)
@@ -71,4 +81,5 @@ func main() {
 	p.AddJobDependency(jH, jI)
 	status := p.Run()
 	logrus.Info(status)
+	msg.SendStatus(status)
 }

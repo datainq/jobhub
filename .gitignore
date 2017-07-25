@@ -15,3 +15,6 @@
 
 .DS_Store
 .vscode
+cmd/tests/simple_success
+cmd/tests/simple_failure
+cmd/credentials

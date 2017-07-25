@@ -6,15 +6,15 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
-	
+
 	"github.com/sirupsen/logrus"
 )
 
 var nextPipelineID = 1
 
 type Pipeline struct {
-	Name    string
-	Log     logrus.FieldLogger
+	Name string
+	Log  logrus.FieldLogger
 
 	id              int
 	nextJobID       int
@@ -48,7 +48,7 @@ type StatusCode int
 
 const (
 	Created   StatusCode = 0
-	Sheduled  StatusCode = 1
+	Scheduled StatusCode = 1
 	Failed    StatusCode = 2
 	Succeeded StatusCode = 3
 )
@@ -120,7 +120,7 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	}
 }
 
-func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
+func (p *Pipeline) resolveDependencyRecursion(jobID, level int) {
 	if l := p.recursionLevels[jobID]; l >= level {
 		return
 	}
@@ -180,6 +180,9 @@ func (p *Pipeline) runJob(job Job) (JobStatus, error) {
 func (p *Pipeline) Run() PipelineStatus {
 	queue := p.resolveDependency()
 	pipelineStatus := PipelineStatus{JobStatus: make([]StatusCode, len(queue))}
+	for i, _ := range pipelineStatus.JobStatus {
+		pipelineStatus.JobStatus[i] = Scheduled
+	}
 	if queue == nil {
 		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
@@ -191,11 +194,13 @@ func (p *Pipeline) Run() PipelineStatus {
 			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][t: %v][StatusCode: %d] | %s",
 				p.id, p.Name, jID, p.jobByID[jID].Name, jobStatus.Runtime, jobStatus.Code, err)
 			pipelineStatus.Code = Failed
+			return pipelineStatus
 		}
 	}
 	return pipelineStatus
 }
 
+//TODO(amwolff) remove this method
 func (p *Pipeline) PrintDeps() {
 	p.Log.Debugf("Queue: %d", p.resolveDependency())
 }
