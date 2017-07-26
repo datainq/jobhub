@@ -36,12 +36,19 @@ type Job struct {
 type PipelineStatus struct {
 	Code      StatusCode
 	Runtime   time.Duration
-	JobStatus []StatusCode
+	JobStatus []JobStatus
 }
 
 type JobStatus struct {
-	Code    StatusCode
-	Runtime time.Duration
+	Job      Job
+	Code     StatusCode
+	Statuses []ExecutionStatus
+}
+
+type ExecutionStatus struct {
+	ExecutionStart time.Time
+	Code           StatusCode
+	Runtime        time.Duration
 }
 
 type StatusCode int
@@ -54,7 +61,7 @@ const (
 )
 
 func (j Job) String() string {
-	return fmt.Sprintf("Pipeline ID: %d | ID: %d| Name: %s\n", j.pipelineID, j.id, j.Name)
+	return fmt.Sprintf("Pipeline ID: %d | ID: %d| Name: %s", j.pipelineID, j.id, j.Name)
 }
 
 func NewPipeline() *Pipeline {
@@ -93,7 +100,6 @@ func (p *Pipeline) AddJob(job Job) Job {
 	p.jobContainer = append(p.jobContainer, job)
 	p.jobByID[job.id] = job
 	p.startingJob[job.id] = true
-	p.Log.Debug(p.jobContainer)
 	return job
 }
 
@@ -127,7 +133,6 @@ func (p *Pipeline) resolveDependencyRecursion(jobID, level int) {
 	p.recursionLevels[jobID] = level
 	level++
 	for _, depID := range p.jobDependency[jobID] {
-		p.Log.Debugf("%s -> %s | recursion level: %d", p.jobByID[jobID], p.jobByID[depID], level)
 		p.resolveDependencyRecursion(depID, level)
 	}
 }
@@ -157,46 +162,54 @@ func (p *Pipeline) resolveDependency() []int {
 	return queue
 }
 
-func (p *Pipeline) runJob(job Job) (JobStatus, error) {
+func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
+	ret := ExecutionStatus{ExecutionStart: time.Now().UTC()}
 	_, err := os.Stat(job.Path)
 	if err != nil {
-		return JobStatus{Code: Failed}, err
+		ret.Code = Failed
+		return ret, err
 	}
 	process := exec.Command(job.Path)
 	start := time.Now()
 	err = process.Run()
-	elapsed := time.Since(start)
+	ret.Runtime = time.Since(start)
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
 			p.Log.Errorf("Cannot cast to exitError: %s", err)
 		}
 		p.Log.Debug(exitError.Sys().(syscall.WaitStatus))
-		return JobStatus{Code: Failed, Runtime: elapsed}, err
+		ret.Code = Failed
+		return ret, err
 	}
-	return JobStatus{Code: Succeeded, Runtime: elapsed}, err
+	ret.Code = Succeeded
+	return ret, err
 }
 
 func (p *Pipeline) Run() PipelineStatus {
 	queue := p.resolveDependency()
-	pipelineStatus := PipelineStatus{JobStatus: make([]StatusCode, len(queue))}
-	for i, _ := range pipelineStatus.JobStatus {
-		pipelineStatus.JobStatus[i] = Scheduled
-	}
 	if queue == nil {
 		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
+	pipelineStatus := PipelineStatus{JobStatus: make([]JobStatus, len(queue))}
+	pipelineStatus.Code = Scheduled
 	for i, jID := range queue {
-		jobStatus, err := p.runJob(p.jobByID[jID])
-		pipelineStatus.Runtime += jobStatus.Runtime
-		pipelineStatus.JobStatus[i] = jobStatus.Code
+		pipelineStatus.JobStatus[i].Job = p.jobByID[jID]
+		pipelineStatus.JobStatus[i].Code = Scheduled
+	}
+	for i, jID := range queue {
+		executionStatus, err := p.runJob(p.jobByID[jID])
+		pipelineStatus.JobStatus[i].Statuses = append(pipelineStatus.JobStatus[i].Statuses, executionStatus)
+		pipelineStatus.JobStatus[i].Code = executionStatus.Code
+		pipelineStatus.Runtime += executionStatus.Runtime
 		if err != nil {
-			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][t: %v][StatusCode: %d] | %s",
-				p.id, p.Name, jID, p.jobByID[jID].Name, jobStatus.Runtime, jobStatus.Code, err)
+			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
+				p.id, p.Name, jID, p.jobByID[jID].Name, executionStatus.Runtime, executionStatus.Code, err)
 			pipelineStatus.Code = Failed
 			return pipelineStatus
 		}
 	}
+	pipelineStatus.Code = Succeeded
 	return pipelineStatus
 }
 
