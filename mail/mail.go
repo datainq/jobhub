@@ -20,13 +20,12 @@ type EMail struct {
 	Log      logrus.FieldLogger
 }
 
-func (e *EMail) SendStatus(statusPipeline jobhub.PipelineStatus) {
-
+func (e *EMail) SendStatus(pipelineStatus jobhub.PipelineStatus) {
 	m := gomail.NewMessage()
 	m.SetHeader("From", e.From)
 	m.SetHeader("To", e.To)
 	m.SetHeader("Subject", e.Subject)
-	m.SetBody("text/html", "SOMETHING")
+	// m.SetBody("text/html", pipelineStatus)
 	d := gomail.NewDialer(e.Host, e.Port, e.Username, e.Password)
 	if err := d.DialAndSend(m); err != nil {
 		e.Log.Panic(err)

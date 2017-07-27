@@ -88,7 +88,7 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Job has already been added",
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has already been added",
 				p.id, p.Name, job.id, job.Name)
 		}
 	}
