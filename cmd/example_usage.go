@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/datainq/jobhub"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,15 +64,16 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	// msg := mail.EMail{
-	// 	From:     "FROM",
-	// 	To:       "TO",
-	// 	Subject:  "SUBJECT",
-	// 	Host:     "HOST",
-	// 	Port:     465,
-	// 	Username: "USERNAME",
-	// 	Password: "PASSWORD",
-	// }
+	msg := mail.EMail{
+		From:         "FROM",
+		To:           "TO",
+		Subject:      "SUBJECT",
+		Host:         "HOST",
+		Port:         465,
+		Username:     "USERNAME",
+		Password:     "PASSWORD",
+		TemplatePath: "PATH/TO/TEMPLATE",
+	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)
 	p.AddJobDependency(jC, jD, jE)
@@ -80,6 +81,6 @@ func main() {
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
 	status := p.Run()
-	spew.Dump(status)
-	// msg.SendStatus(status)
+	// spew.Dump(status)
+	msg.SendStatus(status)
 }

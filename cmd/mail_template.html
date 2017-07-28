@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        table {
+            font-family: arial, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        td,
+        th {
+            border: 1px solid #dddddd;
+            text-align: center;
+            padding: 8px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #dddddd;
+        }
+
+        caption {
+            font-family: arial, sans-serif;
+            display: table-caption;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <p>
+        <table>
+            <caption>{{.Code}}</caption>
+            <tr>
+                <th>Last status</th>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Execution start</th>
+                <th>Runtime</th>
+                <th>Path</th>
+                <th>Retries</th>
+            </tr>
+            {{range .JobStatus}}
+            <tr>
+                <td>{{.LastStatus.Code}}</td>
+                <td>{{.Job.Name}}</td>
+                <td>{{.JobID}}</td>
+                <td>{{.LastStatus.ExecutionStart}}</td>
+                <td>{{.LastStatus.Runtime}}</td>
+                <td>{{.Job.Path}}</td>
+                <td>{{len .Statuses}}</td>
+            </tr>
+            {{end}}
+        </table>
+    </p>
+</body>
+
+</html>

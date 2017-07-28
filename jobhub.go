@@ -40,9 +40,10 @@ type PipelineStatus struct {
 }
 
 type JobStatus struct {
-	Job      Job
-	Code     StatusCode
-	Statuses []ExecutionStatus
+	Job        Job
+	JobID      int
+	LastStatus ExecutionStatus
+	Statuses   []ExecutionStatus
 }
 
 type ExecutionStatus struct {
@@ -60,8 +61,26 @@ const (
 	Succeeded StatusCode = 3
 )
 
+var statusDescription = map[StatusCode]string{
+	Created:   "Created",
+	Scheduled: "Scheduled",
+	Failed:    "Failed",
+	Succeeded: "Succeeded",
+}
+
 func (j Job) String() string {
-	return fmt.Sprintf("Pipeline ID: %d | ID: %d| Name: %s", j.pipelineID, j.id, j.Name)
+	return fmt.Sprintf("Pipeline ID: %d | ID: %d | Name: %s", j.pipelineID, j.id, j.Name)
+}
+
+func (sCode StatusCode) String() string {
+	return statusDescription[sCode]
+}
+
+func (jStatus JobStatus) LastExecutionStatus() *ExecutionStatus {
+	if len(jStatus.Statuses) > 0 {
+		return &jStatus.Statuses[len(jStatus.Statuses)-1]
+	}
+	return nil
 }
 
 func NewPipeline() *Pipeline {
@@ -195,12 +214,13 @@ func (p *Pipeline) Run() PipelineStatus {
 	pipelineStatus.Code = Scheduled
 	for i, jID := range queue {
 		pipelineStatus.JobStatus[i].Job = p.jobByID[jID]
-		pipelineStatus.JobStatus[i].Code = Scheduled
+		pipelineStatus.JobStatus[i].JobID = jID
+		pipelineStatus.JobStatus[i].LastStatus.Code = Scheduled
 	}
 	for i, jID := range queue {
 		executionStatus, err := p.runJob(p.jobByID[jID])
 		pipelineStatus.JobStatus[i].Statuses = append(pipelineStatus.JobStatus[i].Statuses, executionStatus)
-		pipelineStatus.JobStatus[i].Code = executionStatus.Code
+		pipelineStatus.JobStatus[i].LastStatus = *pipelineStatus.JobStatus[i].LastExecutionStatus()
 		pipelineStatus.Runtime += executionStatus.Runtime
 		if err != nil {
 			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
@@ -211,9 +231,4 @@ func (p *Pipeline) Run() PipelineStatus {
 	}
 	pipelineStatus.Code = Succeeded
 	return pipelineStatus
-}
-
-//TODO(amwolff) remove this method
-func (p *Pipeline) PrintDeps() {
-	p.Log.Debugf("Queue: %d", p.resolveDependency())
 }
