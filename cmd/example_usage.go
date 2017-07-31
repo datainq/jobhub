@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/datainq/jobhub"
-	"github.com/datainq/jobhub/mail"
+	"github.com/datainq/jobhub/notifier"
 	"github.com/sirupsen/logrus"
 )
 
@@ -13,7 +13,7 @@ func main() {
 	jA := p.AddJob(
 		jobhub.Job{
 			Name: "A",
-			Path: "./tests/simple_failure",
+			Path: "./tests/simple_success",
 		},
 	)
 	jB := p.AddJob(
@@ -64,15 +64,14 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	msg := mail.EMail{
+	msg := notifier.Mail{
 		From:         "FROM",
 		To:           "TO",
-		Subject:      "SUBJECT",
 		Host:         "HOST",
 		Port:         465,
 		Username:     "USERNAME",
 		Password:     "PASSWORD",
-		TemplatePath: "PATH/TO/TEMPLATE",
+		TemplatePath: "./mail_template.html",
 	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)
@@ -81,6 +80,5 @@ func main() {
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
 	status := p.Run()
-	// spew.Dump(status)
 	msg.SendStatus(status)
 }

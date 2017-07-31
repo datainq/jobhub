@@ -34,9 +34,9 @@ type Job struct {
 }
 
 type PipelineStatus struct {
-	Code      StatusCode
-	Runtime   time.Duration
-	JobStatus []JobStatus
+	PipelineName string
+	Status       ExecutionStatus
+	JobStatus    []JobStatus
 }
 
 type JobStatus struct {
@@ -197,7 +197,7 @@ func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
 		if !ok {
 			p.Log.Errorf("Cannot cast to exitError: %s", err)
 		}
-		p.Log.Debug(exitError.Sys().(syscall.WaitStatus))
+		p.Log.Error(exitError.Sys().(syscall.WaitStatus))
 		ret.Code = Failed
 		return ret, err
 	}
@@ -211,24 +211,25 @@ func (p *Pipeline) Run() PipelineStatus {
 		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
 	pipelineStatus := PipelineStatus{JobStatus: make([]JobStatus, len(queue))}
-	pipelineStatus.Code = Scheduled
+	pipelineStatus.PipelineName = p.Name
 	for i, jID := range queue {
 		pipelineStatus.JobStatus[i].Job = p.jobByID[jID]
 		pipelineStatus.JobStatus[i].JobID = jID
 		pipelineStatus.JobStatus[i].LastStatus.Code = Scheduled
 	}
+	pipelineStatus.Status.ExecutionStart = time.Now().UTC()
 	for i, jID := range queue {
 		executionStatus, err := p.runJob(p.jobByID[jID])
 		pipelineStatus.JobStatus[i].Statuses = append(pipelineStatus.JobStatus[i].Statuses, executionStatus)
 		pipelineStatus.JobStatus[i].LastStatus = *pipelineStatus.JobStatus[i].LastExecutionStatus()
-		pipelineStatus.Runtime += executionStatus.Runtime
+		pipelineStatus.Status.Runtime += executionStatus.Runtime
 		if err != nil {
 			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
 				p.id, p.Name, jID, p.jobByID[jID].Name, executionStatus.Runtime, executionStatus.Code, err)
-			pipelineStatus.Code = Failed
+			pipelineStatus.Status.Code = Failed
 			return pipelineStatus
 		}
 	}
-	pipelineStatus.Code = Succeeded
+	pipelineStatus.Status.Code = Succeeded
 	return pipelineStatus
 }
