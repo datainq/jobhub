@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/datainq/jobhub"
-	"github.com/datainq/jobhub/notifier"
+	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,7 +64,7 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
-	msg := notifier.Mail{
+	msg := mail.Mail{
 		From:         "FROM",
 		To:           "TO",
 		Host:         "HOST",

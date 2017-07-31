@@ -1,4 +1,4 @@
-package notifier
+package mail
 
 import (
 	"bytes"
