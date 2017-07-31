@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var nextPipelineID int = 1
+var nextPipelineID = 1
 
 type Pipeline struct {
 	Name string
@@ -33,13 +33,54 @@ type Job struct {
 	id         int
 }
 
-type exitStatus struct {
-	runtime time.Duration
-	status  syscall.WaitStatus
+type PipelineStatus struct {
+	PipelineName string
+	Status       ExecutionStatus
+	JobStatus    []JobStatus
+}
+
+type JobStatus struct {
+	Job        Job
+	JobID      int
+	LastStatus ExecutionStatus
+	Statuses   []ExecutionStatus
+}
+
+type ExecutionStatus struct {
+	ExecutionStart time.Time
+	Code           StatusCode
+	Runtime        time.Duration
+}
+
+type StatusCode int
+
+const (
+	Created   StatusCode = 0
+	Scheduled StatusCode = 1
+	Failed    StatusCode = 2
+	Succeeded StatusCode = 3
+)
+
+var statusDescription = map[StatusCode]string{
+	Created:   "Created",
+	Scheduled: "Scheduled",
+	Failed:    "Failed",
+	Succeeded: "Succeeded",
 }
 
 func (j Job) String() string {
-	return fmt.Sprintf("Pipeline ID: %d | ID: %d| Name: %s\n", j.pipelineID, j.id, j.Name)
+	return fmt.Sprintf("Pipeline ID: %d | ID: %d | Name: %s", j.pipelineID, j.id, j.Name)
+}
+
+func (sCode StatusCode) String() string {
+	return statusDescription[sCode]
+}
+
+func (jStatus JobStatus) LastExecutionStatus() *ExecutionStatus {
+	if len(jStatus.Statuses) > 0 {
+		return &jStatus.Statuses[len(jStatus.Statuses)-1]
+	}
+	return nil
 }
 
 func NewPipeline() *Pipeline {
@@ -66,7 +107,7 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] | Job has already been added",
+			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has already been added",
 				p.id, p.Name, job.id, job.Name)
 		}
 	}
@@ -78,7 +119,6 @@ func (p *Pipeline) AddJob(job Job) Job {
 	p.jobContainer = append(p.jobContainer, job)
 	p.jobByID[job.id] = job
 	p.startingJob[job.id] = true
-	p.Log.Debug(p.jobContainer)
 	return job
 }
 
@@ -105,14 +145,13 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	}
 }
 
-func (p *Pipeline) resolveDependencyRecursion(jobID int, level int) {
+func (p *Pipeline) resolveDependencyRecursion(jobID, level int) {
 	if l := p.recursionLevels[jobID]; l >= level {
 		return
 	}
 	p.recursionLevels[jobID] = level
 	level++
 	for _, depID := range p.jobDependency[jobID] {
-		p.Log.Debugf("%s -> %s | recursion level: %d", p.jobByID[jobID], p.jobByID[depID], level)
 		p.resolveDependencyRecursion(depID, level)
 	}
 }
@@ -142,40 +181,55 @@ func (p *Pipeline) resolveDependency() []int {
 	return queue
 }
 
-func (p *Pipeline) runJob(job Job) (*exitStatus, error) {
+func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
+	ret := ExecutionStatus{ExecutionStart: time.Now().UTC()}
 	_, err := os.Stat(job.Path)
 	if err != nil {
-		return nil, err
+		ret.Code = Failed
+		return ret, err
 	}
 	process := exec.Command(job.Path)
 	start := time.Now()
 	err = process.Run()
-	elapsed := time.Since(start)
+	ret.Runtime = time.Since(start)
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			p.Log.Panicf("Cannot cast to exitError", err)
+			p.Log.Errorf("Cannot cast to exitError: %s", err)
 		}
-		return &exitStatus{runtime: elapsed, status: exitError.Sys().(syscall.WaitStatus)}, err
+		p.Log.Error(exitError.Sys().(syscall.WaitStatus))
+		ret.Code = Failed
+		return ret, err
 	}
-	return &exitStatus{runtime: elapsed}, err
+	ret.Code = Succeeded
+	return ret, err
 }
 
-func (p *Pipeline) Run() {
+func (p *Pipeline) Run() PipelineStatus {
 	queue := p.resolveDependency()
-	if queue != nil {
-		for _, jID := range queue {
-			exitStatus, err := p.runJob(p.jobByID[jID])
-			if err != nil {
-				p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s][t: %f] | %s",
-					p.id, p.Name, jID, p.jobByID[jID].Name, exitStatus.runtime, err)
-			}
-		}
-	} else {
+	if queue == nil {
 		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
 	}
-}
-
-func (p *Pipeline) PrintDeps() {
-	p.Log.Debugf("Queue: %d", p.resolveDependency())
+	pipelineStatus := PipelineStatus{JobStatus: make([]JobStatus, len(queue))}
+	pipelineStatus.PipelineName = p.Name
+	for i, jID := range queue {
+		pipelineStatus.JobStatus[i].Job = p.jobByID[jID]
+		pipelineStatus.JobStatus[i].JobID = jID
+		pipelineStatus.JobStatus[i].LastStatus.Code = Scheduled
+	}
+	pipelineStatus.Status.ExecutionStart = time.Now().UTC()
+	for i, jID := range queue {
+		executionStatus, err := p.runJob(p.jobByID[jID])
+		pipelineStatus.JobStatus[i].Statuses = append(pipelineStatus.JobStatus[i].Statuses, executionStatus)
+		pipelineStatus.JobStatus[i].LastStatus = *pipelineStatus.JobStatus[i].LastExecutionStatus()
+		pipelineStatus.Status.Runtime += executionStatus.Runtime
+		if err != nil {
+			p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
+				p.id, p.Name, jID, p.jobByID[jID].Name, executionStatus.Runtime, executionStatus.Code, err)
+			pipelineStatus.Status.Code = Failed
+			return pipelineStatus
+		}
+	}
+	pipelineStatus.Status.Code = Succeeded
+	return pipelineStatus
 }

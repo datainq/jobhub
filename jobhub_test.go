@@ -2,8 +2,6 @@ package jobhub
 
 import (
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestAddJobDependency(t *testing.T) {
@@ -13,7 +11,6 @@ func TestAddJobDependency(t *testing.T) {
 		}
 	}()
 	p := NewPipeline()
-	logrus.SetLevel(logrus.DebugLevel)
 	jA := Job{
 		Name: "A",
 		Path: "./tests/simple_success",
