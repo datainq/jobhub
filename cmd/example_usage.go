@@ -67,16 +67,18 @@ func main() {
 		},
 	)
 	msg := mail.Mail{
-		From: "From",
-		To:   "To",
+		From: "From", //Sender's mail address
+		To:   "To",   //Recipient's mail address
 
-		Host:     "Host",
-		Port:     465,
-		Username: "Username",
-		Password: "Password",
-
+		// These fields are initialized with methods which return casts to template.Template
+		// objects after parsing template files from given paths
 		Subject: template.Must(template.ParseFiles("./default-templates/subject.html")),
 		Body:    template.Must(template.ParseFiles("./default-templates/body.html")),
+
+		Host:     "Host", //SMTP server address
+		Port:     465,
+		Username: "Username", //Server authentication credentials,
+		Password: "Password", //the example values are self-explanatory
 	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)

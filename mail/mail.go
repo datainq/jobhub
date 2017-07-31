@@ -10,16 +10,15 @@ import (
 )
 
 type Mail struct {
-	From string
-	To   string
+	From    string
+	To      string
+	Subject *template.Template
+	Body    *template.Template
 
 	Host     string
 	Port     int
 	Username string
 	Password string
-
-	Subject *template.Template
-	Body    *template.Template
 
 	Log logrus.FieldLogger
 }
