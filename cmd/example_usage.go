@@ -1,12 +1,16 @@
 package main
 
 import (
+	"html/template"
+
 	"github.com/datainq/jobhub"
+	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	p := jobhub.NewPipeline()
+	p.Name = "Example pipeline"
 	logrus.SetLevel(logrus.DebugLevel)
 	jA := p.AddJob(
 		jobhub.Job{
@@ -17,7 +21,7 @@ func main() {
 	jB := p.AddJob(
 		jobhub.Job{
 			Name: "B",
-			Path: "./tests/simple_success",
+			Path: "./tests/simple_failure",
 		},
 	)
 	jC := p.AddJob(
@@ -62,12 +66,25 @@ func main() {
 			Path: "./tests/simple_success",
 		},
 	)
+	msg := mail.Mail{
+		From: "From", //Sender's mail address
+		To:   "To",   //Recipient's mail address
+
+		// These fields are initialized with methods which return casts to template.Template
+		// objects after parsing template files from given paths
+		Subject: template.Must(template.ParseFiles("./default-templates/subject.html")),
+		Body:    template.Must(template.ParseFiles("./default-templates/body.html")),
+
+		Host:     "Host", //SMTP server address
+		Port:     465,
+		Username: "Username", //Server authentication credentials,
+		Password: "Password", //the example values are self-explanatory
+	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)
 	p.AddJobDependency(jC, jD, jE)
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
-	p.Run()
-	p.PrintDeps()
+	msg.SendStatus(p.Run())
 }
