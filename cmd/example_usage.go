@@ -1,6 +1,8 @@
 package main
 
 import (
+	"html/template"
+
 	"github.com/datainq/jobhub"
 	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
@@ -65,13 +67,18 @@ func main() {
 		},
 	)
 	msg := mail.Mail{
-		From:         "FROM",
-		To:           "TO",
-		Host:         "HOST",
-		Port:         465,
-		Username:     "USERNAME",
-		Password:     "PASSWORD",
-		TemplatePath: "./mail_template.html",
+		From: "From", //Sender's mail address
+		To:   "To",   //Recipient's mail address
+
+		// These fields are initialized with methods which return casts to template.Template
+		// objects after parsing template files from given paths
+		Subject: template.Must(template.ParseFiles("./default-templates/subject.html")),
+		Body:    template.Must(template.ParseFiles("./default-templates/body.html")),
+
+		Host:     "Host", //SMTP server address
+		Port:     465,
+		Username: "Username", //Server authentication credentials,
+		Password: "Password", //the example values are self-explanatory
 	}
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE, jF)
@@ -79,6 +86,5 @@ func main() {
 	p.AddJobDependency(jF, jG)
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
-	status := p.Run()
-	msg.SendStatus(status)
+	msg.SendStatus(p.Run())
 }
