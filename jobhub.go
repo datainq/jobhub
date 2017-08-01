@@ -28,10 +28,6 @@ type Pipeline struct {
 type Job struct {
 	Name string
 	Path string
-<<<<<<< HEAD
-	Args []string
-=======
->>>>>>> upstream/master
 
 	pipelineID int
 	id         int
@@ -192,22 +188,14 @@ func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
 		ret.Code = Failed
 		return ret, err
 	}
-<<<<<<< HEAD
-	process := exec.Command(job.Path, job.Args...)
-=======
 	process := exec.Command(job.Path)
->>>>>>> upstream/master
 	start := time.Now()
 	err = process.Run()
 	ret.Runtime = time.Since(start)
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-<<<<<<< HEAD
-			p.Log.Errorf("Cannot cast to exitError (%s)", err)
-=======
 			p.Log.Errorf("Cannot cast to exitError: %s", err)
->>>>>>> upstream/master
 		}
 		p.Log.Error(exitError.Sys().(syscall.WaitStatus))
 		ret.Code = Failed
