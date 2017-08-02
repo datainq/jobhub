@@ -6,8 +6,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestAddJobDependency(t *testing.T) {
-	retryCount := 1337
+func TestRun(t *testing.T) {
+	retryCount := 100
 	p := NewPipeline()
 	p.Name = "Example pipeline"
 	logrus.SetLevel(logrus.DebugLevel)

@@ -3,6 +3,8 @@ package main
 import (
 	"html/template"
 
+	"github.com/cenkalti/backoff"
+
 	"github.com/datainq/jobhub"
 	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
@@ -20,9 +22,10 @@ func main() {
 	)
 	jB := p.AddJob(
 		jobhub.Job{
-			Name:  "B",
-			Path:  "./tests/simple_failure",
-			Retry: 10,
+			Name:    "B",
+			Path:    "./tests/simple_failure",
+			Retry:   10,
+			Backoff: backoff.NewExponentialBackOff(),
 		},
 	)
 	jC := p.AddJob(
