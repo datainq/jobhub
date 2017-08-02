@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-
 	"github.com/sirupsen/logrus"
 )
 

@@ -4,7 +4,6 @@ import (
 	"html/template"
 
 	"github.com/cenkalti/backoff"
-
 	"github.com/datainq/jobhub"
 	"github.com/datainq/jobhub/mail"
 	"github.com/sirupsen/logrus"
