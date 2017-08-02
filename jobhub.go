@@ -222,27 +222,28 @@ func (p *Pipeline) Run() PipelineStatus {
 		currentRetry    int
 	)
 	for i, jID := range queue {
-		ret.JobStatus[i].Job = p.jobByID[jID]
+		job := p.jobByID[jID]
+		ret.JobStatus[i].Job = job
 		ret.JobStatus[i].JobID = jID
 		ret.JobStatus[i].LastStatus.Code = Scheduled
 	}
 	ret.Status.ExecutionStart = time.Now().UTC()
 	for i, jID := range queue {
+		job := p.jobByID[jID]
 		for {
-			executionStatus, err = p.runJob(p.jobByID[jID])
+			executionStatus, err = p.runJob(job)
 			ret.JobStatus[i].Statuses = append(ret.JobStatus[i].Statuses, executionStatus)
 			ret.JobStatus[i].LastStatus = *ret.JobStatus[i].LastExecutionStatus()
 			ret.Status.Runtime += executionStatus.Runtime
-			if err != nil {
-				currentRetry++
-				if currentRetry >= p.jobByID[jID].Retry && p.jobByID[jID].Retry != -1 {
-					p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
-						p.id, p.Name, jID, p.jobByID[jID].Name, executionStatus.Runtime, executionStatus.Code, err)
-					ret.Status.Code = Failed
-					return ret
-				}
-			} else {
+			if err == nil {
 				break
+			}
+			currentRetry++
+			if currentRetry >= job.Retry && job.Retry != -1 {
+				p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
+					p.id, p.Name, job.id, job.Name, executionStatus.Runtime, executionStatus.Code, err)
+				ret.Status.Code = Failed
+				return ret
 			}
 		}
 	}
