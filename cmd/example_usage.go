@@ -20,8 +20,9 @@ func main() {
 	)
 	jB := p.AddJob(
 		jobhub.Job{
-			Name: "B",
-			Path: "./tests/simple_failure",
+			Name:  "B",
+			Path:  "./tests/simple_failure",
+			Retry: 10,
 		},
 	)
 	jC := p.AddJob(
