@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,10 +27,11 @@ type Pipeline struct {
 }
 
 type Job struct {
-	Name  string
-	Path  string
-	Args  []string
-	Retry int
+	Name    string
+	Path    string
+	Args    []string
+	Retry   int
+	Backoff backoff.BackOff
 
 	pipelineID int
 	id         int
@@ -222,8 +224,7 @@ func (p *Pipeline) Run() PipelineStatus {
 		currentRetry    int
 	)
 	for i, jID := range queue {
-		job := p.jobByID[jID]
-		ret.JobStatus[i].Job = job
+		ret.JobStatus[i].Job = p.jobByID[jID]
 		ret.JobStatus[i].JobID = jID
 		ret.JobStatus[i].LastStatus.Code = Scheduled
 	}
@@ -244,6 +245,9 @@ func (p *Pipeline) Run() PipelineStatus {
 					p.id, p.Name, job.id, job.Name, executionStatus.Runtime, executionStatus.Code, err)
 				ret.Status.Code = Failed
 				return ret
+			}
+			if job.Backoff != nil {
+				time.Sleep(job.Backoff.NextBackOff())
 			}
 		}
 	}
