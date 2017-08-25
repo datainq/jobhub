@@ -10,8 +10,7 @@ import (
 )
 
 func main() {
-	p := jobhub.NewPipeline()
-	p.Name = "Example pipeline"
+	p := jobhub.NewPipeline("Example pipeline", logrus.StandardLogger())
 	logrus.SetLevel(logrus.DebugLevel)
 	jA := p.AddJob(
 		jobhub.Job{

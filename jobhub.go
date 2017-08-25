@@ -14,9 +14,8 @@ import (
 var nextPipelineID = 1
 
 type Pipeline struct {
-	Name string
-	Log  logrus.FieldLogger
-
+	name            string
+	logger          logrus.FieldLogger
 	id              int
 	nextJobID       int
 	jobContainer    []Job
@@ -87,9 +86,10 @@ func (j Job) String() string {
 	return fmt.Sprintf("Pipeline ID: %d | ID: %d | Name: %s", j.pipelineID, j.id, j.Name)
 }
 
-func NewPipeline() *Pipeline {
+func NewPipeline(name string, logger logrus.FieldLogger) *Pipeline {
 	return &Pipeline{
-		Log:             logrus.StandardLogger(),
+		name:            name,
+		logger:          logger,
 		jobByID:         make(map[int]Job),
 		jobDependency:   make(map[int][]int),
 		startingJob:     make(map[int]bool),
@@ -111,8 +111,8 @@ func (p *Pipeline) nextIDJob() int {
 func (p *Pipeline) AddJob(job Job) Job {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has already been added",
-				p.id, p.Name, job.id, job.Name)
+			p.logger.Panicf("Pipeline [%d][%s] | Job [%d][%s] has already been added",
+				p.id, p.name, job.id, job.Name)
 		}
 	}
 	if p.id == 0 {
@@ -130,23 +130,70 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
 	var tempContainer []Job
 	tempContainer = append(deps, job)
 	if p.id == 0 {
-		p.Log.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
-			p.id, p.Name)
+		p.logger.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
+			p.id, p.name)
 	}
 	if p.jobContainer == nil {
-		p.Log.Panicf("Pipeline [%d][%s] | Job Container is empty",
-			p.id, p.Name)
+		p.logger.Panicf("Pipeline [%d][%s] | Job Container is empty",
+			p.id, p.name)
 	}
 	for _, givenJob := range tempContainer {
 		if givenJob.pipelineID != p.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
-				p.id, p.Name, givenJob.id, givenJob.Name)
+			p.logger.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
+				p.id, p.name, givenJob.id, givenJob.Name)
 		}
 	}
 	for _, d := range deps {
 		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
 		delete(p.startingJob, d.id)
 	}
+}
+
+func (p *Pipeline) topologicalSort() []int {
+	var (
+		permMark       = map[int]bool{}
+		tempMark       = map[int]bool{}
+		cycle          bool
+		cycleRecovery  int
+		cycleRecovered []int
+		queue          []int
+		visit          func(int)
+	)
+	visit = func(u int) {
+		if permMark[u] {
+			return
+		} else if tempMark[u] {
+			cycle = true
+			cycleRecovery = u
+			return
+		}
+		tempMark[u] = true
+		for _, v := range p.jobDependency[u] {
+			visit(v)
+			if cycle {
+				if cycleRecovery > 0 {
+					if cycleRecovery == u {
+						cycleRecovery = 0
+					}
+					cycleRecovered = append(cycleRecovered, u)
+				}
+				return
+			}
+		}
+		delete(tempMark, u)
+		permMark[u] = true
+		queue = append(queue, u)
+	}
+	for u := range p.jobDependency {
+		if !permMark[u] {
+			visit(u)
+		}
+		if cycle {
+			p.logger.Panicf("Pipeline [%d][%s] | Job dependency graph is not a DAG (%d)",
+				p.id, p.name, cycleRecovered)
+		}
+	}
+	return queue
 }
 
 func (p *Pipeline) resolveDependencyRecursion(jobID, level int) {
@@ -164,7 +211,7 @@ func (p *Pipeline) resolveDependency() []int {
 	//TODO(amwolff) switch to sort.SortSlice
 	var queue []int
 	tempRL := make(map[int]int)
-	for startID, _ := range p.startingJob {
+	for startID := range p.startingJob {
 		p.resolveDependencyRecursion(startID, 1)
 	}
 	for jID, l := range p.recursionLevels {
@@ -199,9 +246,9 @@ func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)
 		if !ok {
-			p.Log.Errorf("Cannot cast to exitError (%s)", err)
+			p.logger.Errorf("Cannot cast to exitError (%s)", err)
 		}
-		p.Log.Error(exitError.Sys().(syscall.WaitStatus))
+		p.logger.Error(exitError.Sys().(syscall.WaitStatus))
 		ret.Code = Failed
 		return ret, err
 	}
@@ -212,10 +259,10 @@ func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
 func (p *Pipeline) Run() PipelineStatus {
 	queue := p.resolveDependency()
 	if queue == nil {
-		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
+		p.logger.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.name)
 	}
 	ret := PipelineStatus{
-		PipelineName: p.Name,
+		PipelineName: p.name,
 		JobStatus:    make([]JobStatus, len(queue)),
 	}
 	var (
@@ -239,15 +286,16 @@ func (p *Pipeline) Run() PipelineStatus {
 			if err == nil {
 				break
 			}
+			nextBackoff := job.Backoff.NextBackOff()
 			currentRetry++
-			if currentRetry >= job.Retry && job.Retry != -1 {
-				p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
-					p.id, p.Name, job.id, job.Name, executionStatus.Runtime, executionStatus.Code, err)
+			if (currentRetry >= job.Retry && job.Retry != -1) || nextBackoff == backoff.Stop {
+				p.logger.Panicf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
+					p.id, p.name, job.id, job.Name, executionStatus.Runtime, executionStatus.Code, err)
 				ret.Status.Code = Failed
 				return ret
 			}
 			if job.Backoff != nil {
-				time.Sleep(job.Backoff.NextBackOff())
+				time.Sleep(nextBackoff)
 			}
 		}
 	}
