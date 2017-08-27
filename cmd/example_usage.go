@@ -2,23 +2,29 @@ package main
 
 import (
 	"html/template"
+	"log"
 
 	"github.com/cenkalti/backoff"
 	"github.com/datainq/jobhub"
 	"github.com/datainq/jobhub/mail"
-	"github.com/sirupsen/logrus"
 )
 
+func catch(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
-	p := jobhub.NewPipeline("Example pipeline", logrus.StandardLogger())
-	logrus.SetLevel(logrus.DebugLevel)
-	jA := p.AddJob(
+	p := jobhub.NewPipeline("Example pipeline")
+	jA, err := p.AddJob(
 		jobhub.Job{
 			Name: "A",
 			Path: "./tests/simple_success",
 		},
 	)
-	jB := p.AddJob(
+	catch(err)
+	jB, err := p.AddJob(
 		jobhub.Job{
 			Name:    "B",
 			Path:    "./tests/simple_failure",
@@ -26,48 +32,28 @@ func main() {
 			Backoff: backoff.NewExponentialBackOff(),
 		},
 	)
-	jC := p.AddJob(
+	catch(err)
+	jC, err := p.AddJob(
 		jobhub.Job{
 			Name: "C",
 			Path: "./tests/simple_success",
 		},
 	)
-	jD := p.AddJob(
+	catch(err)
+	jD, err := p.AddJob(
 		jobhub.Job{
 			Name: "D",
 			Path: "./tests/simple_success",
 		},
 	)
-	jE := p.AddJob(
+	catch(err)
+	jE, err := p.AddJob(
 		jobhub.Job{
 			Name: "E",
 			Path: "./tests/simple_success",
 		},
 	)
-	jF := p.AddJob(
-		jobhub.Job{
-			Name: "F",
-			Path: "./tests/simple_success",
-		},
-	)
-	jG := p.AddJob(
-		jobhub.Job{
-			Name: "G",
-			Path: "./tests/simple_success",
-		},
-	)
-	jH := p.AddJob(
-		jobhub.Job{
-			Name: "H",
-			Path: "./tests/simple_success",
-		},
-	)
-	jI := p.AddJob(
-		jobhub.Job{
-			Name: "I",
-			Path: "./tests/simple_success",
-		},
-	)
+	catch(err)
 	msg := mail.Mail{
 		From: "From", //Sender's mail address
 		To:   "To",   //Recipient's mail address
@@ -83,10 +69,11 @@ func main() {
 		Password: "Password", //the example values are self-explanatory
 	}
 	p.AddJobDependency(jA, jB, jD)
-	p.AddJobDependency(jB, jC, jE, jF)
+	p.AddJobDependency(jB, jC, jE)
 	p.AddJobDependency(jC, jD, jE)
-	p.AddJobDependency(jF, jG)
-	p.AddJobDependency(jG, jH)
-	p.AddJobDependency(jH, jI)
-	msg.SendStatus(p.Run())
+	if status, err := p.Run(); err != nil {
+		if err = msg.SendStatus(status); err != nil {
+			log.Fatal(err)
+		}
+	}
 }

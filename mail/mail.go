@@ -5,7 +5,6 @@ import (
 	"html/template"
 
 	"github.com/datainq/jobhub"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/gomail.v2"
 )
 
@@ -19,26 +18,33 @@ type Mail struct {
 	Port     int
 	Username string
 	Password string
-
-	Log logrus.FieldLogger
 }
 
-func (m Mail) executeTemplate(t *template.Template, data interface{}) string {
+func (m Mail) executeTemplate(t *template.Template, data interface{}) (string, error) {
 	buf := new(bytes.Buffer)
 	if err := t.Execute(buf, data); err != nil {
-		m.Log.Panic(err)
+		return "", err
 	}
-	return buf.String()
+	return buf.String(), nil
 }
 
-func (m Mail) SendStatus(pipelineStatus jobhub.PipelineStatus) {
+func (m Mail) SendStatus(pipelineStatus jobhub.PipelineStatus) error {
 	message := gomail.NewMessage()
 	message.SetHeader("From", m.From)
 	message.SetHeader("To", m.To)
-	message.SetHeader("Subject", m.executeTemplate(m.Subject, pipelineStatus))
-	message.SetBody("text/html", m.executeTemplate(m.Body, pipelineStatus))
+	s, err := m.executeTemplate(m.Subject, pipelineStatus)
+	if err != nil {
+		return err
+	}
+	b, err := m.executeTemplate(m.Body, pipelineStatus)
+	if err != nil {
+		return err
+	}
+	message.SetHeader("Subject", s)
+	message.SetBody("text/html", b)
 	d := gomail.NewDialer(m.Host, m.Port, m.Username, m.Password)
 	if err := d.DialAndSend(message); err != nil {
-		m.Log.Error(err)
+		return err
 	}
+	return nil
 }

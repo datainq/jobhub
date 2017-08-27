@@ -1,69 +1,65 @@
 package jobhub
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/cenkalti/backoff"
-	"github.com/sirupsen/logrus"
 )
 
 func TestRun(t *testing.T) {
-	p := NewPipeline("My pipeline", logrus.StandardLogger())
+	p := NewPipeline("Test Pipeline")
 
-	logrus.SetLevel(logrus.DebugLevel)
-
-	jA := p.AddJob(
+	jA, _ := p.AddJob(
 		Job{
 			Name: "A",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jB := p.AddJob(
+	jB, _ := p.AddJob(
 		Job{
 			Name:    "B",
 			Path:    "./cmd/tests/simple_failure",
-			Retry:   -1,
+			Retry:   5,
 			Backoff: backoff.NewExponentialBackOff(),
 		},
 	)
-	jC := p.AddJob(
+	jC, _ := p.AddJob(
 		Job{
 			Name: "C",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jD := p.AddJob(
+	jD, _ := p.AddJob(
 		Job{
 			Name: "D",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jE := p.AddJob(
+	jE, _ := p.AddJob(
 		Job{
 			Name: "E",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jF := p.AddJob(
+	jF, _ := p.AddJob(
 		Job{
 			Name: "F",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jG := p.AddJob(
+	jG, _ := p.AddJob(
 		Job{
 			Name: "G",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jH := p.AddJob(
+	jH, _ := p.AddJob(
 		Job{
 			Name: "H",
 			Path: "./cmd/tests/simple_success",
 		},
 	)
-	jI := p.AddJob(
+	jI, _ := p.AddJob(
 		Job{
 			Name: "I",
 			Path: "./cmd/tests/simple_success",
@@ -76,25 +72,29 @@ func TestRun(t *testing.T) {
 	p.AddJobDependency(jG, jH)
 	p.AddJobDependency(jH, jI)
 
-	p.Run()
+	if _, err := p.Run(); err == nil {
+		t.Error("Run() should have returned an error")
+	}
 }
+
 func TestTopologicalSort(t *testing.T) {
-	p := NewPipeline("My pipeline", logrus.StandardLogger())
+	p := NewPipeline("Test Pipeline")
 
-	logrus.SetLevel(logrus.DebugLevel)
-
-	jA := p.AddJob(Job{})
-	jB := p.AddJob(Job{})
-	jC := p.AddJob(Job{})
-	jD := p.AddJob(Job{})
-	jE := p.AddJob(Job{})
+	jA, _ := p.AddJob(Job{})
+	jB, _ := p.AddJob(Job{})
+	jC, _ := p.AddJob(Job{})
+	jD, _ := p.AddJob(Job{})
+	jE, _ := p.AddJob(Job{})
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE)
 	p.AddJobDependency(jC, jD, jE)
 
 	wantO1 := []int{5, 4, 3, 2, 1}
 	wantO2 := []int{4, 5, 3, 2, 1}
-	have := p.topologicalSort()
+	have, err := p.topologicalSort()
+	if err != nil {
+		t.Error(err)
+	}
 
 	for i, h := range have {
 		if h != wantO1[i] {
@@ -107,21 +107,13 @@ func TestTopologicalSort(t *testing.T) {
 }
 
 func TestTopologicalSortCycleDetection(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Recovered in f (%v)\n", r)
-		}
-	}()
+	p := NewPipeline("Test Pipeline")
 
-	p := NewPipeline("My pipeline", logrus.StandardLogger())
-
-	logrus.SetLevel(logrus.DebugLevel)
-
-	jA := p.AddJob(Job{})
-	jB := p.AddJob(Job{})
-	jC := p.AddJob(Job{})
-	jD := p.AddJob(Job{})
-	jE := p.AddJob(Job{})
+	jA, _ := p.AddJob(Job{})
+	jB, _ := p.AddJob(Job{})
+	jC, _ := p.AddJob(Job{})
+	jD, _ := p.AddJob(Job{})
+	jE, _ := p.AddJob(Job{})
 	p.AddJobDependency(jA, jB, jD)
 	p.AddJobDependency(jB, jC, jE)
 	p.AddJobDependency(jC, jD, jE)
@@ -129,6 +121,7 @@ func TestTopologicalSortCycleDetection(t *testing.T) {
 	// test cycle detection
 	p.AddJobDependency(jD, jB)
 
-	p.topologicalSort()
-	t.Error("The code did not panic")
+	if _, err := p.topologicalSort(); err == nil {
+		t.Error("topologicalSort() should have returned an error")
+	}
 }
