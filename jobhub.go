@@ -13,7 +13,7 @@ import (
 
 var pipelineIDPool = 1
 
-type Pipeline struct {
+type pipeline struct {
 	name          string
 	id            int
 	nextJobID     int
@@ -79,8 +79,8 @@ func (s StatusCode) String() string {
 	return statusDescription[s]
 }
 
-func NewPipeline(name string) *Pipeline {
-	return &Pipeline{
+func NewPipeline(name string) *pipeline {
+	return &pipeline{
 		name:          name,
 		jobByID:       make(map[int]Job),
 		jobDependency: make(map[int][]int),
@@ -93,12 +93,12 @@ func nextIDPipeline() int {
 	return tempID
 }
 
-func (p *Pipeline) nextIDJob() int {
+func (p *pipeline) nextIDJob() int {
 	p.nextJobID++
 	return p.nextJobID
 }
 
-func (p *Pipeline) AddJob(job Job) (Job, error) {
+func (p *pipeline) AddJob(job Job) (Job, error) {
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
 			return j, fmt.Errorf("%s (%d) in %s (%d) has already been added", j.Name, j.id, p.name, p.id)
@@ -114,13 +114,10 @@ func (p *Pipeline) AddJob(job Job) (Job, error) {
 	return job, nil
 }
 
-func (p *Pipeline) AddJobDependency(job Job, deps ...Job) error {
+func (p *pipeline) AddJobDependency(job Job, deps ...Job) error {
 	tempContainer := append(deps, job)
 	if p.id == 0 {
-		return fmt.Errorf("%s (%d) not initialized", p.name, p.id)
-	}
-	if p.jobContainer == nil {
-		return fmt.Errorf("%s (%d) has no jobs added", p.name, p.id)
+		return fmt.Errorf("%s (%d) not initialized (i.e. has no jobs added)", p.name, p.id)
 	}
 	for _, j := range tempContainer {
 		if j.pipelineID != p.id {
@@ -133,10 +130,10 @@ func (p *Pipeline) AddJobDependency(job Job, deps ...Job) error {
 	return nil
 }
 
-func (p Pipeline) topologicalSort() ([]int, error) {
+func (p pipeline) topologicalSort() ([]int, error) {
 	var (
-		permanentMark = map[int]bool{}
 		temporaryMark = map[int]bool{}
+		permanentMark = map[int]bool{}
 		acyclic       = true
 		queue         []int
 		visit         func(int)
@@ -195,7 +192,7 @@ func runJob(job Job) (ExecutionStatus, error) {
 	return ret, err
 }
 
-func (p Pipeline) Run() (PipelineStatus, error) {
+func (p pipeline) Run() (PipelineStatus, error) {
 	ret := PipelineStatus{PipelineName: p.name}
 	queue, err := p.topologicalSort()
 	if err != nil {
@@ -232,7 +229,7 @@ func (p Pipeline) Run() (PipelineStatus, error) {
 			if (currentRetry >= job.Retry && job.Retry != -1) || nextBackoff == backoff.Stop {
 				ret.Status.Code = Failed
 				return ret, fmt.Errorf("%s (%d) in %s (%d) returned a permanent error (%v)",
-					p.name, p.id, job.Name, job.id, err)
+					job.Name, job.id, p.name, p.id, err)
 			}
 			time.Sleep(nextBackoff)
 		}
