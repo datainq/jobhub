@@ -4,26 +4,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/sirupsen/logrus"
 )
 
 var nextPipelineID = 1
 
 type Pipeline struct {
-	Name string
-	Log  logrus.FieldLogger
-
-	id              int
-	nextJobID       int
-	jobContainer    []Job
-	jobByID         map[int]Job
-	jobDependency   map[int][]int
-	startingJob     map[int]bool
-	recursionLevels map[int]int
+	name          string
+	id            int
+	nextJobID     int
+	jobContainer  []Job
+	jobByID       map[int]Job
+	jobDependency map[int][]int
 }
 
 type Job struct {
@@ -33,8 +27,8 @@ type Job struct {
 	Retry   int
 	Backoff backoff.BackOff
 
-	pipelineID int
 	id         int
+	pipelineID int
 }
 
 type PipelineStatus struct {
@@ -72,28 +66,23 @@ var statusDescription = map[StatusCode]string{
 	Succeeded: "Succeeded",
 }
 
-func (jStatus JobStatus) LastExecutionStatus() *ExecutionStatus {
-	if len(jStatus.Statuses) > 0 {
-		return &jStatus.Statuses[len(jStatus.Statuses)-1]
+func (j JobStatus) LastExecutionStatus() *ExecutionStatus {
+	if len(j.Statuses) > 0 {
+		return &j.Statuses[len(j.Statuses)-1]
 	}
 	return nil
 }
 
-func (sCode StatusCode) String() string {
-	return statusDescription[sCode]
+func (s StatusCode) String() string {
+	return statusDescription[s]
 }
 
-func (j Job) String() string {
-	return fmt.Sprintf("Pipeline ID: %d | ID: %d | Name: %s", j.pipelineID, j.id, j.Name)
-}
-
-func NewPipeline() *Pipeline {
+func NewPipeline(name string) *Pipeline {
 	return &Pipeline{
-		Log:             logrus.StandardLogger(),
-		jobByID:         make(map[int]Job),
-		jobDependency:   make(map[int][]int),
-		startingJob:     make(map[int]bool),
-		recursionLevels: make(map[int]int),
+		name:          name,
+		id:            nextIDPipeline(),
+		jobByID:       make(map[int]Job),
+		jobDependency: make(map[int][]int),
 	}
 }
 
@@ -108,100 +97,84 @@ func (p *Pipeline) nextIDJob() int {
 	return p.nextJobID
 }
 
-func (p *Pipeline) AddJob(job Job) Job {
+func (p *Pipeline) AddJob(job Job) (Job, error) {
+	if p.id == 0 {
+		return job, fmt.Errorf("%s (%d) not initalized (misuse of constructor)", p.name, p.id)
+	}
 	for _, j := range p.jobContainer {
 		if j.id == job.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] has already been added",
-				p.id, p.Name, job.id, job.Name)
+			return j, fmt.Errorf("%s (%d) in %s (%d) has already been added", j.Name, j.id, p.name, p.id)
 		}
 	}
-	if p.id == 0 {
-		p.id = nextIDPipeline()
-	}
-	job.pipelineID = p.id
 	job.id = p.nextIDJob()
+	job.pipelineID = p.id
 	p.jobContainer = append(p.jobContainer, job)
 	p.jobByID[job.id] = job
-	p.startingJob[job.id] = true
-	return job
+	return job, nil
 }
 
-func (p *Pipeline) AddJobDependency(job Job, deps ...Job) {
-	var tempContainer []Job
-	tempContainer = append(deps, job)
-	if p.id == 0 {
-		p.Log.Panicf("Pipeline [%d][%s] | Pipeline not initialized",
-			p.id, p.Name)
-	}
+func (p *Pipeline) AddJobDependency(job Job, deps ...Job) error {
 	if p.jobContainer == nil {
-		p.Log.Panicf("Pipeline [%d][%s] | Job Container is empty",
-			p.id, p.Name)
+		return fmt.Errorf("%s (%d) has no jobs added", p.name, p.id)
 	}
-	for _, givenJob := range tempContainer {
-		if givenJob.pipelineID != p.id {
-			p.Log.Panicf("Pipeline [%d][%s] | Job [%d][%s] does not belong to this pipeline",
-				p.id, p.Name, givenJob.id, givenJob.Name)
+	for _, j := range append(deps, job) {
+		if j.pipelineID != p.id {
+			return fmt.Errorf("%s (%d) does not belong to %s (%d)", j.Name, j.id, p.name, p.id)
 		}
 	}
 	for _, d := range deps {
 		p.jobDependency[job.id] = append(p.jobDependency[job.id], d.id)
-		delete(p.startingJob, d.id)
 	}
+	return nil
 }
 
-func (p *Pipeline) resolveDependencyRecursion(jobID, level int) {
-	if l := p.recursionLevels[jobID]; l >= level {
-		return
-	}
-	p.recursionLevels[jobID] = level
-	level++
-	for _, depID := range p.jobDependency[jobID] {
-		p.resolveDependencyRecursion(depID, level)
-	}
-}
+func (p Pipeline) topologicalSort() ([]int, error) {
+	var (
+		temporaryMark = make(map[int]bool)
+		permanentMark = make(map[int]bool)
+		acyclic       = true
+		queue         []int
+		visit         func(int)
+	)
 
-func (p *Pipeline) resolveDependency() []int {
-	//TODO(amwolff) switch to sort.SortSlice
-	var queue []int
-	tempRL := make(map[int]int)
-	for startID, _ := range p.startingJob {
-		p.resolveDependencyRecursion(startID, 1)
+	visit = func(u int) {
+		if temporaryMark[u] {
+			acyclic = false
+		} else if !(temporaryMark[u] || permanentMark[u]) {
+			temporaryMark[u] = true
+			for _, v := range p.jobDependency[u] {
+				visit(v)
+				if !acyclic {
+					return
+				}
+			}
+			delete(temporaryMark, u)
+			permanentMark[u] = true
+			queue = append(queue, u)
+		}
 	}
-	for jID, l := range p.recursionLevels {
-		tempRL[jID] = l
-	}
-	for len(tempRL) > 0 {
-		var jobID int
-		max := 0
-		for jID, l := range tempRL {
-			if l > max {
-				max = l
-				jobID = jID
+
+	for u := range p.jobDependency {
+		if !permanentMark[u] {
+			visit(u)
+			if !acyclic {
+				return nil, fmt.Errorf("%s (%d) is not a DAG", p.name, p.id)
 			}
 		}
-		queue = append(queue, jobID)
-		delete(tempRL, jobID)
 	}
-	return queue
+	return queue, nil
 }
 
-func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
+func runJob(job Job) (ExecutionStatus, error) {
 	ret := ExecutionStatus{ExecutionStart: time.Now().UTC()}
-	_, err := os.Stat(job.Path)
-	if err != nil {
+	if _, err := os.Stat(job.Path); err != nil {
 		ret.Code = Failed
 		return ret, err
 	}
-	process := exec.Command(job.Path, job.Args...)
 	start := time.Now()
-	err = process.Run()
+	err := exec.Command(job.Path, job.Args...).Run()
 	ret.Runtime = time.Since(start)
 	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			p.Log.Errorf("Cannot cast to exitError (%s)", err)
-		}
-		p.Log.Error(exitError.Sys().(syscall.WaitStatus))
 		ret.Code = Failed
 		return ret, err
 	}
@@ -209,19 +182,19 @@ func (p *Pipeline) runJob(job Job) (ExecutionStatus, error) {
 	return ret, err
 }
 
-func (p *Pipeline) Run() PipelineStatus {
-	queue := p.resolveDependency()
-	if queue == nil {
-		p.Log.Panicf("Pipeline [%d][%s] | No jobs in queue", p.id, p.Name)
+func (p Pipeline) Run() (PipelineStatus, error) {
+	ret := PipelineStatus{PipelineName: p.name}
+	queue, err := p.topologicalSort()
+	if err != nil {
+		return ret, err
+	} else if queue == nil {
+		return ret, fmt.Errorf("%s (%d) has not been scheduled", p.name, p.id)
 	}
-	ret := PipelineStatus{
-		PipelineName: p.Name,
-		JobStatus:    make([]JobStatus, len(queue)),
-	}
+	ret.JobStatus = make([]JobStatus, len(queue))
 	var (
 		executionStatus ExecutionStatus
-		err             error
 		currentRetry    int
+		nextBackoff     time.Duration
 	)
 	for i, jID := range queue {
 		ret.JobStatus[i].Job = p.jobByID[jID]
@@ -232,7 +205,7 @@ func (p *Pipeline) Run() PipelineStatus {
 	for i, jID := range queue {
 		job := p.jobByID[jID]
 		for {
-			executionStatus, err = p.runJob(job)
+			executionStatus, err = runJob(job)
 			ret.JobStatus[i].Statuses = append(ret.JobStatus[i].Statuses, executionStatus)
 			ret.JobStatus[i].LastStatus = *ret.JobStatus[i].LastExecutionStatus()
 			ret.Status.Runtime += executionStatus.Runtime
@@ -240,17 +213,17 @@ func (p *Pipeline) Run() PipelineStatus {
 				break
 			}
 			currentRetry++
-			if currentRetry >= job.Retry && job.Retry != -1 {
-				p.Log.Errorf("Pipeline [%d][%s] | Job [%d][%s][Runtime: %v][StatusCode: %d] | %s",
-					p.id, p.Name, job.id, job.Name, executionStatus.Runtime, executionStatus.Code, err)
-				ret.Status.Code = Failed
-				return ret
-			}
 			if job.Backoff != nil {
-				time.Sleep(job.Backoff.NextBackOff())
+				nextBackoff = job.Backoff.NextBackOff()
 			}
+			if (currentRetry >= job.Retry && job.Retry != -1) || nextBackoff == backoff.Stop {
+				ret.Status.Code = Failed
+				return ret, fmt.Errorf("%s (%d) in %s (%d) returned a permanent error (%v)",
+					job.Name, job.id, p.name, p.id, err)
+			}
+			time.Sleep(nextBackoff)
 		}
 	}
 	ret.Status.Code = Succeeded
-	return ret
+	return ret, nil
 }
