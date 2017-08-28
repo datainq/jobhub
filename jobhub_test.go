@@ -7,8 +7,13 @@ import (
 )
 
 func TestAddJob(t *testing.T) {
-	p := NewPipeline("Test Pipeline")
-	j, err := p.AddJob(Job{
+	p := Pipeline{}
+	if _, err := p.AddJob(Job{}); err == nil {
+		t.Errorf("AddJob() on %s should have returned an error", p.name)
+	}
+
+	q := NewPipeline("Test Pipeline")
+	j, err := q.AddJob(Job{
 		Name:    "Test Job",
 		Path:    "path/to/binary",
 		Args:    []string{"-abc"},
@@ -17,13 +22,13 @@ func TestAddJob(t *testing.T) {
 	},
 	)
 	if err != nil {
-		t.Errorf("AddJob() on %s returned an error", p.name)
+		t.Errorf("AddJob() on %s returned an error", q.name)
 	}
-	if j.id != 1 || p.id != 1 || len(p.jobContainer) != 1 {
-		t.Errorf("AddJob() on %s misfunctioned", p.name)
+	if j.id != 1 || len(q.jobContainer) != 1 {
+		t.Errorf("AddJob() on %s misfunctioned", q.name)
 	}
-	if _, err := p.AddJob(j); err == nil {
-		t.Errorf("AddJob() on %s should have returned an error", p.name)
+	if _, err := q.AddJob(j); err == nil {
+		t.Errorf("AddJob() on %s should have returned an error", q.name)
 	}
 }
 
@@ -36,12 +41,12 @@ func TestAddJobDependency(t *testing.T) {
 		t.Errorf("AddJobDependency() on %s returned an error", p.name)
 	}
 
-	q := NewPipeline("Another Test Pipeline")
+	q := NewPipeline("And Another Test Pipeline")
 	if err := q.AddJobDependency(Job{}); err == nil {
 		t.Errorf("AddJobDependency() on %s should have returned an error", q.name)
 	}
-	jA, _ := q.AddJob(Job{})
-	if err := q.AddJobDependency(jA, Job{}); err == nil {
+	jB, _ := q.AddJob(Job{})
+	if err := q.AddJobDependency(jB, Job{}); err == nil {
 		t.Errorf("AddJobDependency() on %s should have returned an error", q.name)
 	}
 }
