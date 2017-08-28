@@ -2,10 +2,8 @@ package jobhub
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -138,6 +136,7 @@ func (p pipeline) topologicalSort() ([]int, error) {
 		queue         []int
 		visit         func(int)
 	)
+
 	visit = func(u int) {
 		if permanentMark[u] {
 			return
@@ -157,6 +156,7 @@ func (p pipeline) topologicalSort() ([]int, error) {
 			queue = append(queue, u)
 		}
 	}
+
 	for u := range p.jobDependency {
 		if !(temporaryMark[u] && permanentMark[u]) {
 			visit(u)
@@ -170,21 +170,14 @@ func (p pipeline) topologicalSort() ([]int, error) {
 
 func runJob(job Job) (ExecutionStatus, error) {
 	ret := ExecutionStatus{ExecutionStart: time.Now().UTC()}
-	_, err := os.Stat(job.Path)
-	if err != nil {
+	if _, err := os.Stat(job.Path); err != nil {
 		ret.Code = Failed
 		return ret, err
 	}
-	process := exec.Command(job.Path, job.Args...)
 	start := time.Now()
-	err = process.Run()
+	err := exec.Command(job.Path, job.Args...).Run()
 	ret.Runtime = time.Since(start)
 	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			log.Printf("cannot cast to exitError (%v)", err)
-		}
-		log.Print(exitError.Sys().(syscall.WaitStatus))
 		ret.Code = Failed
 		return ret, err
 	}

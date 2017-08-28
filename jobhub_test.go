@@ -19,6 +19,9 @@ func TestAddJob(t *testing.T) {
 	if err != nil {
 		t.Errorf("AddJob() on %s returned an error", p.name)
 	}
+	if j.id != 1 || p.id != 1 || len(p.jobContainer) != 1 {
+		t.Errorf("AddJob() on %s misfunctioned", p.name)
+	}
 	if _, err := p.AddJob(j); err == nil {
 		t.Errorf("AddJob() on %s should have returned an error", p.name)
 	}
